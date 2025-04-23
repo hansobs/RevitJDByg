@@ -65,8 +65,6 @@ C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\hellowo
 C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\helloworld\bin\Debug\Autodesk.UI.Windows.WebOnDesktop.dll
 C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\helloworld\bin\Debug\Microsoft.Web.WebView2.Wpf.dll
 C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\helloworld\bin\Debug\Microsoft.Web.WebView2.Core.dll
-C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\helloworld\bin\Debug\RevitAPI.xml
-C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\helloworld\bin\Debug\RevitAPIUI.xml
 C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\helloworld\bin\Debug\RevitAddInUtility.xml
 C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\helloworld\bin\Debug\cs-CZ\AdWindows.resources.dll
 C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\helloworld\bin\Debug\de-DE\AdWindows.resources.dll
