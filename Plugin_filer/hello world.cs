@@ -10,6 +10,12 @@ using Autodesk.Revit.UI;
 using System.Windows.Media.Imaging;
 using Autodesk.Revit.Attributes;
 
+//--------------------- SETUP ---------------------//
+// lokale vairabler der bliver kaldt i koden:
+string bitmapIconPath = @"C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Test\Icons\Hans.png";
+
+
+//--------------------- SETUP ---------------------//
 
 namespace FirstPlugin
 {
@@ -28,7 +34,7 @@ namespace FirstPlugin
             pushButton.ToolTip = "Hej hans se hvad jeg har lavet";
 
             // bitmap icon
-            Uri urlImage = new Uri(@"C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Test\Icons\Hans.png");
+            Uri urlImage = new Uri(bitmapIconPath);
             BitmapImage bitmapImage = new BitmapImage(urlImage);
             pushButton.LargeImage = bitmapImage;
 
