@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+ <AddIn Type="Application">
+       <Name>FirstPlugin</Name>
+       <FullClassName>FirstPlugin.Class1</FullClassName>
+       <Assembly>C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Test\FirstPlugin\FirstPlugin\bin\Debug\FirstPlugin.dll</Assembly>
+       <AddInId>37AB7340-D1CC-4FA0-8EB9-028AD38A9C0B</AddInId>
+    <VendorId>Jens</VendorId>
+    <VendorDescription>Firmanavn evt.</VendorDescription>
+ </AddIn>
+</RevitAddIns>
