@@ -1,0 +1,12 @@
+{
+    "type": "extension",
+    "rocket_mode_compatible": false,
+    "name": "My First pyRevit Extension",
+    "description": "A simple Hello World extension",
+    "author": "Your Name",
+    "author_profile": "https://github.com/yourusername",
+    "url": "https://github.com/yourusername/your-repo-name",
+    "website": "https://github.com/yourusername/your-repo-name",
+    "image": "",
+    "dependencies": []
+}
