@@ -76,6 +76,9 @@ def save_to_csv(material_data):
         save_dialog.FilterIndex = 1
         save_dialog.RestoreDirectory = True
         
+        # Set default directory to C: drive
+        save_dialog.InitialDirectory = r"C:\"
+        
         # Set default filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         save_dialog.FileName = "Material_Export_{}".format(timestamp)
@@ -84,24 +87,30 @@ def save_to_csv(material_data):
         if save_dialog.ShowDialog() == DialogResult.OK:
             file_path = save_dialog.FileName
             
-            # Write CSV file
-            with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
+            # Write CSV file (IronPython compatible way)
+            with open(file_path, 'w') as csvfile:
                 if material_data:
                     # Get field names from first material
                     fieldnames = material_data[0].keys()
-                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                     
-                    # Write header
-                    writer.writeheader()
+                    # Write header manually
+                    header = ','.join(fieldnames)
+                    csvfile.write(header + '\n')
                     
-                    # Write data rows
+                    # Write data rows manually
                     for material in material_data:
-                        writer.writerow(material)
+                        row_values = []
+                        for field in fieldnames:
+                            value = str(material[field])
+                            # Escape commas and quotes in CSV values
+                            if ',' in value or '"' in value or '\n' in value:
+                                value = '"' + value.replace('"', '""') + '"'
+                            row_values.append(value)
+                        csvfile.write(','.join(row_values) + '\n')
                 else:
                     # Write empty file with headers
-                    fieldnames = ['Name', 'ID', 'Class', 'Category', 'Color', 'Shininess', 'Smoothness', 'Transparency']
-                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                    writer.writeheader()
+                    header = 'Name,ID,Class,Category,Color,Shininess,Smoothness,Transparency'
+                    csvfile.write(header + '\n')
             
             return file_path, len(material_data)
         else:
