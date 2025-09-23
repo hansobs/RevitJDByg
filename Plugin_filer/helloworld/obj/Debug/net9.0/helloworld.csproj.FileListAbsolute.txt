@@ -1,5 +1,0 @@
-C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\helloworld\obj\Debug\net9.0\helloworld.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\helloworld\obj\Debug\net9.0\helloworld.AssemblyInfoInputs.cache
-C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\helloworld\obj\Debug\net9.0\helloworld.AssemblyInfo.cs
-C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\helloworld\obj\Debug\net9.0\helloworld.csproj.CoreCompileInputs.cache
-C:\Users\jensd\Documents\JD-Tegnogbyg\Plugin\Git\RevitJDByg\Plugin_filer\helloworld\obj\Debug\net9.0\helloworld.sourcelink.json
