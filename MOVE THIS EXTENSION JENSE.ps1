@@ -1,11 +1,15 @@
-# PowerShell script to move pyRevit extension to the extensions folder
+# PowerShell script to copy pyRevit extension to test folder (P:\JDBYG REVIT)
 
 # Get the current script directory
 $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# Define source and destination paths
+# Define source and destination paths for testing
 $sourcePath = Join-Path $scriptDirectory "pyrevit_export_materials.extension"
-$destinationPath = "C:\Users\JENDAM\AppData\Roaming\pyRevit-Master\extensions"
+$testDestinationPath = "C:\Users\JENDAM\AppData\Roaming\pyRevit-Master\extensions"
+
+Write-Host "=== pyRevit Extension Test Copy ===" -ForegroundColor Cyan
+Write-Host "This is a TEST run - copying to: $testDestinationPath" -ForegroundColor Yellow
+Write-Host ""
 
 # Check if source folder exists
 if (-Not (Test-Path $sourcePath)) {
@@ -14,61 +18,74 @@ if (-Not (Test-Path $sourcePath)) {
     exit 1
 }
 
-# Create destination directory if it doesn't exist
-if (-Not (Test-Path $destinationPath)) {
-    Write-Host "Creating destination directory: $destinationPath"
-    try {
-        New-Item -ItemType Directory -Path $destinationPath -Force
-        Write-Host "Destination directory created successfully."
-    }
-    catch {
-        Write-Error "Failed to create destination directory: $_"
-        exit 1
-    }
+# Check if test destination exists
+if (-Not (Test-Path $testDestinationPath)) {
+    Write-Host "Test destination folder not found: $testDestinationPath" -ForegroundColor Red
+    Write-Host "Please ensure the P:\JDBYG REVIT folder exists on your machine."
+    exit 1
 }
 
 # Define the full destination path for the extension
-$fullDestinationPath = Join-Path $destinationPath "pyrevit_export_materials.extension"
+$fullDestinationPath = Join-Path $testDestinationPath "pyrevit_export_materials.extension"
 
-# Check if extension already exists at destination
+# Check if extension already exists at test destination
 if (Test-Path $fullDestinationPath) {
-    $response = Read-Host "Extension already exists at destination. Do you want to overwrite it? (Y/N)"
+    Write-Host "Extension already exists at test destination." -ForegroundColor Yellow
+    $response = Read-Host "Do you want to overwrite it? (Y/N)"
     if ($response -ne 'Y' -and $response -ne 'y') {
-        Write-Host "Operation cancelled by user."
+        Write-Host "Operation cancelled by user." -ForegroundColor Yellow
         exit 0
     }
     
     # Remove existing extension
     try {
         Remove-Item -Path $fullDestinationPath -Recurse -Force
-        Write-Host "Existing extension removed."
+        Write-Host "Existing test extension removed." -ForegroundColor Green
     }
     catch {
-        Write-Error "Failed to remove existing extension: $_"
+        Write-Error "Failed to remove existing test extension: $_"
         exit 1
     }
 }
 
-# Move the extension folder
+# Copy the extension folder
 try {
-    Write-Host "Moving extension from: $sourcePath"
-    Write-Host "To: $fullDestinationPath"
+    Write-Host "Copying extension for testing..." -ForegroundColor Blue
+    Write-Host "From: $sourcePath" -ForegroundColor Gray
+    Write-Host "To: $fullDestinationPath" -ForegroundColor Gray
     
-    Move-Item -Path $sourcePath -Destination $destinationPath -Force
+    Copy-Item -Path $sourcePath -Destination $testDestinationPath -Recurse -Force
     
-    Write-Host "✓ Extension moved successfully!"
-    Write-Host "The pyrevit_export_materials.extension is now installed at: $fullDestinationPath"
     Write-Host ""
-    Write-Host "Next steps:"
-    Write-Host "1. Restart Revit if it's currently running"
-    Write-Host "2. The extension should appear in your pyRevit toolbar"
+    Write-Host "Test copy completed successfully!" -ForegroundColor Green
+    Write-Host "Extension copied to: $fullDestinationPath" -ForegroundColor Gray
+    
+    # Display folder contents for verification
+    Write-Host ""
+    Write-Host "Verifying copy - Contents of test destination:" -ForegroundColor Cyan
+    if (Test-Path $fullDestinationPath) {
+        $items = Get-ChildItem -Path $fullDestinationPath -Recurse
+        Write-Host "Total items copied: $($items.Count)" -ForegroundColor Green
+        
+        # Show first few items
+        Write-Host "Sample contents:" -ForegroundColor Cyan
+        $items | Select-Object -First 10 | ForEach-Object {
+            Write-Host "  $($_.Name)" -ForegroundColor White
+        }
+        
+        if ($items.Count -gt 10) {
+            Write-Host "  ... and $($items.Count - 10) more items" -ForegroundColor Gray
+        }
+    }
 }
 catch {
-    Write-Error "Failed to move extension: $_"
+    Write-Error "Test copy failed: $_"
     exit 1
 }
 
-# Optional: Pause to see results
 Write-Host ""
-Write-Host "Press any key to continue..."
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+Write-Host "TEST COMPLETE" -ForegroundColor Magenta
+Write-Host "The extension has been copied to the test folder." -ForegroundColor White
+Write-Host "Original extension remains in the script directory." -ForegroundColor White
+Write-Host ""
+Read-Host "Press Enter to exit"
