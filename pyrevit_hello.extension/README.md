@@ -76,7 +76,6 @@ The exported CSV file contains the following columns:
 
 ### Example Output
 
-```csv
 ElementId;Category;Family;Type;Material;Thickness (mm);Area (m2);Volume (m3)
 12345;Walls;Basic Wall;Generic - 200mm;Concrete;150.0;25.5;3.83
 12345;Walls;Basic Wall;Generic - 200mm;Insulation;50.0;25.5;1.28
