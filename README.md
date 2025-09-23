@@ -1,11 +1,11 @@
 ## to do next time/what to test:
-download new version
-save it in the extension folder
-reload pyrevit
-on projekt1 press the new updated extension to export csv
+- **download new version
+- **save it in the extension folder
+- **reload pyrevit
+- **on projekt1 press the new updated extension to export csv
 
-it should by default suggest the c drive as the saving location instead of the location of the extension
-when choosing a location, the csv export should work - last test threw an error during the csv export.
+- **it should by default suggest the c drive as the saving location instead of the location of the extension
+- **when choosing a location, the csv export should work - last test threw an error during the csv export.
 
 
 
