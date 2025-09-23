@@ -1,4 +1,4 @@
-# My First pyRevit Script - Material Export Extension
+# Material Export Extension
 
 A pyRevit extension that exports comprehensive material data from Revit models to CSV format for quantity calculations and analysis.
 
