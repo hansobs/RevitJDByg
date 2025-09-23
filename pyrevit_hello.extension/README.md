@@ -100,6 +100,7 @@ ElementId;Category;Family;Type;Material;Thickness (mm);Area (m2);Volume (m3)
 - Check your antivirus software isn't blocking file creation
 
 ## 📁 File Structure
+```
 pyrevit_export_materials.extension/
 ├── Jens D Data Export.tab/
 │   └── Export Tools.panel/
@@ -107,7 +108,7 @@ pyrevit_export_materials.extension/
 │           ├── script.py
 │           └── icon.png
 └── README.md
-
+```
 ## 🤝 Support
 
 For issues, questions, or feature requests:
@@ -115,10 +116,6 @@ For issues, questions, or feature requests:
 1. Check the troubleshooting section above
 2. Review the pyRevit documentation
 3. Contact the development team
-
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 🔄 Version History
 
