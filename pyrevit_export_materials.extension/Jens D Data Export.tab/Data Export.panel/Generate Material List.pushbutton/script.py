@@ -84,7 +84,7 @@ def save_to_csv(material_data):
             with open(file_path, 'wb') as csvfile:  # Note: 'wb' mode for IronPython
                 if material_data:
                     fieldnames = material_data[0].keys()
-                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames, lineterminator='\n')
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter =';', lineterminator='\n')
                     writer.writeheader()
                     for material in material_data:
                         writer.writerow(material)
