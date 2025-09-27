@@ -28,7 +28,6 @@ uidoc = __revit__.ActiveUIDocument
 doc = __revit__.ActiveUIDocument.Document
 
 def get_comprehensive_material_data():
-    """Collect comprehensive family, type, and material data for ESG/CO2 analysis"""
     material_usage_data = []
     
     try:
