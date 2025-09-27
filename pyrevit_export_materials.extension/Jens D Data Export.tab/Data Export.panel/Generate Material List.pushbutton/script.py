@@ -122,6 +122,10 @@ def get_comprehensive_material_data():
                 # Get element geometry for area/volume calculations
                 element_volume = get_element_volume(element)
                 element_area = get_element_area(element)
+                # Get NEW parameters
+                door_width = get_door_width(element)
+                door_height = get_door_height(element)
+                export_guid = get_export_guid(element)
                 # Get materials from the element
                 material_ids = get_element_material_ids(element)
                 if not material_ids:
@@ -147,11 +151,15 @@ def get_comprehensive_material_data():
                             # Element identification
                             'ElementId': element.Id.IntegerValue,
                             'ElementCategory': element.Category.Name if element.Category else "Unknown",
+                            'ExportGUID': export_guid,  # NEW
                             # Family hierarchy
                             'FamilyName': family_name,
                             'FamilyType': family_type,
                             'Type': element_type,
                             'TypeId': element.GetTypeId().IntegerValue,
+                            # NEW door parameters
+                            'DoorWidth_mm': door_width,  # NEW
+                            'DoorHeight_mm': door_height,  # NEW
                             # Material information
                             'MaterialId': material_id.IntegerValue,
                             'MaterialName': material.Name if material.Name else "Unnamed Material",
@@ -319,6 +327,38 @@ def get_element_area(element):
         return "N/A"
     except:
         return "N/A"
+    
+def get_door_width(element):
+    """Get door width parameter"""
+    try:
+        width_param = element.get_Parameter(BuiltInParameter.DOOR_WIDTH)
+        if width_param and width_param.HasValue:
+            width_feet = width_param.AsDouble()
+            width_mm = UnitUtils.ConvertFromInternalUnits(width_feet, UnitTypeId.Millimeters)
+            return format_number(width_mm, 5)
+        return "N/A"
+    except:
+        return "N/A"
+
+def get_door_height(element):
+    """Get door height parameter"""
+    try:
+        height_param = element.get_Parameter(BuiltInParameter.DOOR_HEIGHT)
+        if height_param and height_param.HasValue:
+            height_feet = height_param.AsDouble()
+            height_mm = UnitUtils.ConvertFromInternalUnits(height_feet, UnitTypeId.Millimeters)
+            return format_number(height_mm, 5)
+        return "N/A"
+    except:
+        return "N/A"
+
+def get_export_guid(element):
+    """Get export GUID for element"""
+    try:
+        guid_str = ExportUtils.GetExportId(doc, element.Id)
+        return str(guid_str) if guid_str else "N/A"
+    except:
+        return "N/A"
 
 def save_to_csv(material_data):
     """Save comprehensive material data to CSV file with semicolon delimiter"""
@@ -345,7 +385,8 @@ def save_to_csv(material_data):
                     writer = csv.writer(csvfile, delimiter=';', lineterminator='\n')
                     # Updated headers to include 'Type'
                     headers = [
-                        'ElementId', 'ElementCategory', 'FamilyName', 'FamilyType', 'Type', 'TypeId',
+                        'ElementId', 'ElementCategory', 'ExportGUID', 'FamilyName', 'FamilyType', 'Type', 'TypeId',
+                        'DoorWidth_mm', 'DoorHeight_mm',
                         'MaterialId', 'MaterialName', 'MaterialClass',
                         'Thickness_mm', 'MaterialVolume_m3', 'MaterialArea_m2',
                         'ElementTotalVolume_m3', 'ElementTotalArea_m2'
