@@ -13,6 +13,7 @@ from pyrevit.output import get_output
 import clr
 import csv
 import os
+import time
 from datetime import datetime
 
 # Add references to .NET assemblies
