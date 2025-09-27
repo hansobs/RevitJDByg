@@ -7,6 +7,10 @@
 - **it should by default suggest the c drive as the saving location instead of the location of the extension
 - **when choosing a location, the csv export should work - last test threw an error during the csv export.
 
+## Future ideas:
+
+- able to upload a csv from an excel sheet with headers - the code should try and recognize the columns for what is what, and do a suggestion, you can manually overwrite if you dont agree, and from this, you can calculate the esg - should also in a user friendly way let the user know if a set of information is missing, blocking it from calculating the emissions
+
 
 
 # Material Export Extension
