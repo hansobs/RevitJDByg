@@ -63,7 +63,7 @@ def get_material_layers(element):
                 for i, layer in enumerate(layers):
                     mat_id = layer.MaterialId
                     if mat_id == ElementId.InvalidElementId:
-                        # By Category → create label with category
+                        # By Category create label with category
                         mat_name = "By Category ({})".format(element.Category.Name)
                         mat_id_for_export = "By_Category"
                     else:
