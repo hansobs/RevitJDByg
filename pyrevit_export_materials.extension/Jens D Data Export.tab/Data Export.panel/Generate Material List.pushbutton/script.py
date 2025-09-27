@@ -121,7 +121,7 @@ def get_comprehensive_material_data():
                 # Get element geometry for area/volume calculations
                 element_volume = get_element_volume(element)
                 element_area = get_element_area(element)
-                # Get parameters (REMOVED rough_width and rough_height)
+                # Get parameters
                 element_width = get_element_width(element)
                 element_height = get_element_height(element)
                 export_guid = get_export_guid(element)
@@ -156,86 +156,9 @@ def get_comprehensive_material_data():
                             'FamilyType': family_type,
                             'Type': element_type,
                             'TypeId': element.GetTypeId().IntegerValue,
-                            # Dimension parameters (REMOVED RoughWidth_mm and RoughHeight_mm)
+                            # Dimension parameters
                             'Width_mm': element_width,
                             'Height_mm': element_height,
-                            # Material information
-                            'MaterialId': material_id.IntegerValue,
-                            'MaterialName': material.Name if material.Name else "Unnamed Material",
-                            'MaterialClass': material.MaterialClass if hasattr(material, 'MaterialClass') else "Unknown",
-                            # Thickness and quantities - PROPERLY FORMATTED
-                            'Thickness_mm': format_number(thickness, 5),
-                            'MaterialVolume_m3': format_number(material_volume, 5),
-                            'MaterialArea_m2': format_number(material_area, 5),
-                            'ElementTotalVolume_m3': format_number(element_volume, 5),
-                            'ElementTotalArea_m2': format_number(element_area, 5)
-                        }
-                        
-                        material_usage_data.append(material_info)
-            except Exception as e:
-                # Skip problematic elements but continue processing
-                continue
-    except Exception as e:
-        raise Exception("Error collecting comprehensive material data: {}".format(str(e)))
-    return material_usage_data
-    material_usage_data = []
-    try:
-        # Get all elements that have materials
-        elements = FilteredElementCollector(doc).WhereElementIsNotElementType().ToElements()
-        for element in elements:
-            try:
-                # Skip elements without geometry or materials
-                if not element.Category:
-                    continue
-                # Get family and type information
-                family_name = get_family_name(element)
-                family_type = get_family_type(element)
-                element_type = get_element_type_name(element)
-                # Get element geometry for area/volume calculations
-                element_volume = get_element_volume(element)
-                element_area = get_element_area(element)
-                # Get NEW parameters
-                element_width = get_element_width(element)
-                element_height = get_element_height(element)
-                rough_width = get_rough_width(element)
-                rough_height = get_rough_height(element)
-                export_guid = get_export_guid(element)
-                # Get materials from the element
-                material_ids = get_element_material_ids(element)
-                if not material_ids:
-                    # If no specific materials found, try to get from element type
-                    element_type_obj = doc.GetElement(element.GetTypeId())
-                    if element_type_obj:
-                        type_material_id = element_type_obj.LookupParameter("Material")
-                        if type_material_id and type_material_id.HasValue:
-                            mat_id = type_material_id.AsElementId()
-                            if mat_id != ElementId.InvalidElementId:
-                                material_ids = [mat_id]
-                for material_id in material_ids:
-                    material = doc.GetElement(material_id)
-                    if material:
-                        # Get thickness (layer-specific for walls, floors, etc.)
-                        thickness = get_material_thickness(element, material_id)
-                        # Calculate material-specific volume and area
-                        material_volume = calculate_material_volume(element, material_id, thickness)
-                        material_area = calculate_material_area(element, material_id)
-                        
-                        # FORMAT ALL NUMERICAL VALUES PROPERLY
-                        material_info = {
-                            # Element identification
-                            'ElementId': element.Id.IntegerValue,
-                            'ElementCategory': element.Category.Name if element.Category else "Unknown",
-                            'ExportGUID': export_guid,
-                            # Family hierarchy
-                            'FamilyName': family_name,
-                            'FamilyType': family_type,
-                            'Type': element_type,
-                            'TypeId': element.GetTypeId().IntegerValue,
-                            # NEW dimension parameters
-                            'Width_mm': element_width,
-                            'Height_mm': element_height,
-                            'RoughWidth_mm': rough_width,
-                            'RoughHeight_mm': rough_height,
                             # Material information
                             'MaterialId': material_id.IntegerValue,
                             'MaterialName': material.Name if material.Name else "Unnamed Material",
@@ -405,28 +328,28 @@ def get_element_area(element):
         return "N/A"
 
 def get_element_width(element):
-    """Get Width parameter from element - focuses on Properties panel Width"""
+    """Get Width parameter from element - clean output without debug tags"""
     try:
         # Method 1: Try "Width" parameter on INSTANCE first
         w_param = element.LookupParameter("Width")
         if w_param and w_param.HasValue:
             width_mm = UnitUtils.ConvertFromInternalUnits(w_param.AsDouble(), UnitTypeId.Millimeters)
-            return "INSTANCE[Width]:{}".format(format_number(width_mm, 5))
+            return format_number(width_mm, 5)
         
-        # Method 2: Try "Width" parameter on TYPE 
+        # Method 2: Try "Width" parameter on TYPE
         element_type = doc.GetElement(element.GetTypeId())
         if element_type:
             w_param = element_type.LookupParameter("Width")
             if w_param and w_param.HasValue:
                 width_mm = UnitUtils.ConvertFromInternalUnits(w_param.AsDouble(), UnitTypeId.Millimeters)
-                return "TYPE[Width]:{}".format(format_number(width_mm, 5))
+                return format_number(width_mm, 5)
         
         # Method 3: Try built-in DOOR_WIDTH parameter (backup)
         try:
             width_param = element.get_Parameter(BuiltInParameter.DOOR_WIDTH)
             if width_param and width_param.HasValue:
                 width_mm = UnitUtils.ConvertFromInternalUnits(width_param.AsDouble(), UnitTypeId.Millimeters)
-                return "BUILTIN[DOOR_WIDTH]:{}".format(format_number(width_mm, 5))
+                return format_number(width_mm, 5)
         except:
             pass
         
@@ -435,22 +358,22 @@ def get_element_width(element):
             width_param = element.get_Parameter(BuiltInParameter.WINDOW_WIDTH)
             if width_param and width_param.HasValue:
                 width_mm = UnitUtils.ConvertFromInternalUnits(width_param.AsDouble(), UnitTypeId.Millimeters)
-                return "BUILTIN[WINDOW_WIDTH]:{}".format(format_number(width_mm, 5))
+                return format_number(width_mm, 5)
         except:
             pass
         
         return "N/A"
     except:
-        return "ERROR"
+        return "N/A"
 
 def get_element_height(element):
-    """Get Height parameter from element - focuses on Properties panel Height"""
+    """Get Height parameter from element - clean output without debug tags"""
     try:
         # Method 1: Try "Height" parameter on INSTANCE first
         h_param = element.LookupParameter("Height")
         if h_param and h_param.HasValue:
             height_mm = UnitUtils.ConvertFromInternalUnits(h_param.AsDouble(), UnitTypeId.Millimeters)
-            return "INSTANCE[Height]:{}".format(format_number(height_mm, 5))
+            return format_number(height_mm, 5)
         
         # Method 2: Try "Height" parameter on TYPE
         element_type = doc.GetElement(element.GetTypeId())
@@ -458,14 +381,14 @@ def get_element_height(element):
             h_param = element_type.LookupParameter("Height")
             if h_param and h_param.HasValue:
                 height_mm = UnitUtils.ConvertFromInternalUnits(h_param.AsDouble(), UnitTypeId.Millimeters)
-                return "TYPE[Height]:{}".format(format_number(height_mm, 5))
+                return format_number(height_mm, 5)
         
         # Method 3: Try built-in DOOR_HEIGHT parameter (backup)
         try:
             height_param = element.get_Parameter(BuiltInParameter.DOOR_HEIGHT)
             if height_param and height_param.HasValue:
                 height_mm = UnitUtils.ConvertFromInternalUnits(height_param.AsDouble(), UnitTypeId.Millimeters)
-                return "BUILTIN[DOOR_HEIGHT]:{}".format(format_number(height_mm, 5))
+                return format_number(height_mm, 5)
         except:
             pass
         
@@ -474,13 +397,13 @@ def get_element_height(element):
             height_param = element.get_Parameter(BuiltInParameter.WINDOW_HEIGHT)
             if height_param and height_param.HasValue:
                 height_mm = UnitUtils.ConvertFromInternalUnits(height_param.AsDouble(), UnitTypeId.Millimeters)
-                return "BUILTIN[WINDOW_HEIGHT]:{}".format(format_number(height_mm, 5))
+                return format_number(height_mm, 5)
         except:
             pass
         
         return "N/A"
     except:
-        return "ERROR"
+        return "N/A"
 
 def get_export_guid(element):
     """Get export GUID for element"""
@@ -515,7 +438,7 @@ def save_to_csv(material_data):
                     writer = csv.writer(csvfile, delimiter=';', lineterminator='\n')
                     headers = [
                         'ElementId', 'ElementCategory', 'ExportGUID', 'FamilyName', 'FamilyType', 'Type', 'TypeId',
-                        'Width_mm', 'Height_mm', 
+                        'Width_mm', 'Height_mm',
                         'MaterialId', 'MaterialName', 'MaterialClass',
                         'Thickness_mm', 'MaterialVolume_m3', 'MaterialArea_m2',
                         'ElementTotalVolume_m3', 'ElementTotalArea_m2'
