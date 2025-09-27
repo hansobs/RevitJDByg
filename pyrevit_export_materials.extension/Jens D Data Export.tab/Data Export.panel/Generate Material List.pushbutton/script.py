@@ -36,9 +36,14 @@ def format_number(value, decimals=5):
         formatted = "{:.{}f}".format(float(value), decimals)
         # Remove trailing zeros and unnecessary decimal point
         formatted = formatted.rstrip('0').rstrip('.')
-        return formatted if formatted else "0"
+        if formatted == "":
+            formatted = "0"
+        # Replace dot with comma for European Excel compatibility
+        formatted = formatted.replace('.', ',')
+        return formatted
     except:
         return "N/A"
+
 
 def get_element_type_name(element):
     """Get the element type name"""
