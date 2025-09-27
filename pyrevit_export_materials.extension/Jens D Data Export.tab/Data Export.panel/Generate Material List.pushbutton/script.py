@@ -4,25 +4,25 @@ This script exports comprehensive material data from Revit to CSV format.
 """
 __title__ = "Export ESG Data"
 __author__ = "Jens Damm & Hans Bohn Svendsen"
-  
+
 # Import required modules
 from pyrevit import forms
 import clr
 import csv
 import os
 from datetime import datetime
-  
+
 # Add references to .NET assemblies
 clr.AddReference('System.Windows.Forms')
 clr.AddReference('System')
-  
+
 # Import .NET classes
 from System.Windows.Forms import MessageBox, MessageBoxButtons, MessageBoxIcon, DialogResult, SaveFileDialog
-  
+
 # Import Revit API
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
-  
+
 # Get current Revit application and document
 uidoc = __revit__.ActiveUIDocument
 doc = __revit__.ActiveUIDocument.Document
@@ -86,38 +86,6 @@ def get_element_type_name(element):
         
     except Exception as e:
         return "Exception: {}".format(str(e))
-    """Get the element type name with debugging"""
-    try:
-        # Debug: Check if element has TypeId
-        type_id = element.GetTypeId()
-        if type_id == ElementId.InvalidElementId:
-            return "No TypeId"
-        
-        # Method 1: Direct type lookup
-        element_type = doc.GetElement(type_id)
-        if element_type:
-            if hasattr(element_type, 'Name') and element_type.Name:
-                return element_type.Name
-            else:
-                return "Type exists but no name"
-        
-        # Method 2: Try getting from Symbol (for family instances)
-        if hasattr(element, 'Symbol') and element.Symbol:
-            return element.Symbol.Name
-        
-        # Method 3: Try specific element type properties
-        if hasattr(element, 'WallType') and element.WallType:
-            return element.WallType.Name
-        elif hasattr(element, 'FloorType') and element.FloorType:
-            return element.FloorType.Name
-        elif hasattr(element, 'RoofType') and element.RoofType:
-            return element.RoofType.Name
-        
-        return "No type found"
-        
-    except Exception as e:
-        return "Exception: {}".format(str(e))
-
 
 def get_comprehensive_material_data():
     material_usage_data = []
@@ -182,7 +150,7 @@ def get_comprehensive_material_data():
     except Exception as e:
         raise Exception("Error collecting comprehensive material data: {}".format(str(e)))
     return material_usage_data
-  
+
 def get_family_name(element):
     """Get family name from element"""
     try:
@@ -198,7 +166,7 @@ def get_family_name(element):
             return element.Category.Name if element.Category else "Unknown"
     except:
         return "Unknown"
-  
+
 def get_family_type(element):
     """Get family type name from element using 'Family and Type' parameter"""
     try:
@@ -220,7 +188,7 @@ def get_family_type(element):
             return element_type.Name if element_type else "Unknown"
     except:
         return "Unknown"
-  
+
 def get_element_material_ids(element):
     """Get all material IDs used in an element"""
     material_ids = []
@@ -249,7 +217,7 @@ def get_element_material_ids(element):
         return valid_ids
     except:
         return []
-  
+
 def get_material_thickness(element, material_id):
     """Get thickness of specific material in element"""
     try:
@@ -265,38 +233,15 @@ def get_material_thickness(element, material_id):
                         thickness_feet = layer.Width
                         thickness_mm = UnitUtils.ConvertFromInternalUnits(thickness_feet, UnitTypeId.Millimeters)
                         return round(thickness_mm, 5)  # Changed to 5 decimals
-        
         # For other elements, try to get thickness parameter
         thickness_param = element.LookupParameter("Thickness")
         if thickness_param and thickness_param.HasValue:
             thickness_mm = UnitUtils.ConvertFromInternalUnits(thickness_param.AsDouble(), UnitTypeId.Millimeters)
             return round(thickness_mm, 5)  # Changed to 5 decimals
-        
-        return "N/A"
-    except:
-        return "N/A"    """Get thickness of specific material in element"""
-    try:
-        # For compound structures (walls, floors, roofs)
-        element_type = doc.GetElement(element.GetTypeId())
-        if hasattr(element_type, 'GetCompoundStructure'):
-            compound_structure = element_type.GetCompoundStructure()
-            if compound_structure:
-                layers = compound_structure.GetLayers()
-                for layer in layers:
-                    if layer.MaterialId == material_id:
-                        # Convert from internal units to mm
-                        thickness_feet = layer.Width
-                        thickness_mm = UnitUtils.ConvertFromInternalUnits(thickness_feet, UnitTypeId.Millimeters)
-                        return round(thickness_mm, 2)
-        # For other elements, try to get thickness parameter
-        thickness_param = element.LookupParameter("Thickness")
-        if thickness_param and thickness_param.HasValue:
-            thickness_mm = UnitUtils.ConvertFromInternalUnits(thickness_param.AsDouble(), UnitTypeId.Millimeters)
-            return round(thickness_mm, 2)
         return "N/A"
     except:
         return "N/A"
-  
+
 def calculate_material_volume(element, material_id, thickness):
     """Calculate volume of specific material in element"""
     try:
@@ -308,36 +253,16 @@ def calculate_material_volume(element, material_id, thickness):
                 volume_cuft = area_sqft * thickness_ft
                 volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
                 return round(volume_cum, 5)  # Changed to 5 decimals
-        
         # For other elements, use total volume
         volume_param = element.LookupParameter("Volume")
         if volume_param and volume_param.HasValue:
             volume_cuft = volume_param.AsDouble()
             volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
             return round(volume_cum, 5)  # Changed to 5 decimals
-        
-        return "N/A"
-    except:
-        return "N/A"    """Calculate volume of specific material in element"""
-    try:
-        if hasattr(element, 'WallType') or hasattr(element, 'FloorType'):
-            area_param = element.LookupParameter("Area")
-            if area_param and area_param.HasValue and thickness != "N/A":
-                area_sqft = area_param.AsDouble()
-                thickness_ft = UnitUtils.ConvertToInternalUnits(float(thickness), UnitTypeId.Millimeters)
-                volume_cuft = area_sqft * thickness_ft
-                volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
-                return round(volume_cum, 4)
-        # For other elements, use total volume
-        volume_param = element.LookupParameter("Volume")
-        if volume_param and volume_param.HasValue:
-            volume_cuft = volume_param.AsDouble()
-            volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
-            return round(volume_cum, 4)
         return "N/A"
     except:
         return "N/A"
-  
+
 def calculate_material_area(element, material_id):
     """Calculate area of specific material in element"""
     try:
@@ -349,17 +274,7 @@ def calculate_material_area(element, material_id):
         return "N/A"
     except:
         return "N/A"
-    """Calculate area of specific material in element"""
-    try:
-        area_param = element.LookupParameter("Area")
-        if area_param and area_param.HasValue:
-            area_sqft = area_param.AsDouble()
-            area_sqm = UnitUtils.ConvertFromInternalUnits(area_sqft, UnitTypeId.SquareMeters)
-            return round(area_sqm, 2)
-        return "N/A"
-    except:
-        return "N/A"
-  
+
 def get_element_volume(element):
     """Get total volume of element"""
     try:
@@ -371,7 +286,7 @@ def get_element_volume(element):
         return "N/A"
     except:
         return "N/A"
-  
+
 def get_element_area(element):
     """Get total area of element"""
     try:
@@ -383,7 +298,7 @@ def get_element_area(element):
         return "N/A"
     except:
         return "N/A"
-  
+
 def save_to_csv(material_data):
     """Save comprehensive material data to CSV file with semicolon delimiter"""
     try:
@@ -420,7 +335,7 @@ def save_to_csv(material_data):
             return None, 0
     except Exception as e:
         raise Exception("Error saving CSV file: {}".format(str(e)))
-  
+
 def main():
     """Main function that runs when the button is clicked"""
     try:
@@ -478,6 +393,6 @@ def main():
             MessageBoxButtons.OK,
             MessageBoxIcon.Error
         )
-  
+
 if __name__ == '__main__':
     main()
