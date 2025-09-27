@@ -86,6 +86,82 @@ def get_comprehensive_material_data():
                             'MaterialId': material_id.IntegerValue,
                             'MaterialName': material.Name if material.Name else "Unnamed Material",
                             'MaterialClass': material.MaterialClass if hasattr(material, 'MaterialClass') else "Unknown",
+                            
+                            # Thickness and quantities - the core data for CO2 calculations
+                            'Thickness_mm': thickness,
+                            'MaterialVolume_m3': material_volume,
+                            'MaterialArea_m2': material_area,
+                            'ElementTotalVolume_m3': element_volume,
+                            'ElementTotalArea_m2': element_area
+                        }
+                        
+                        material_usage_data.append(material_info)
+                        
+            except Exception as e:
+                # Skip problematic elements but continue processing
+                continue
+                
+    except Exception as e:
+        raise Exception("Error collecting comprehensive material data: {}".format(str(e)))
+    
+    return material_usage_data    """Collect comprehensive family, type, and material data for ESG/CO2 analysis"""
+    material_usage_data = []
+    
+    try:
+        # Get all elements that have materials
+        elements = FilteredElementCollector(doc).WhereElementIsNotElementType().ToElements()
+        
+        for element in elements:
+            try:
+                # Skip elements without geometry or materials
+                if not element.Category:
+                    continue
+                
+                # Get family and type information
+                family_name = get_family_name(element)
+                family_type = get_family_type(element)
+                
+                # Get element geometry for area/volume calculations
+                element_volume = get_element_volume(element)
+                element_area = get_element_area(element)
+                
+                # Get materials from the element
+                material_ids = get_element_material_ids(element)
+                
+                if not material_ids:
+                    # If no specific materials found, try to get from element type
+                    element_type = doc.GetElement(element.GetTypeId())
+                    if element_type:
+                        type_material_id = element_type.LookupParameter("Material")
+                        if type_material_id and type_material_id.HasValue:
+                            mat_id = type_material_id.AsElementId()
+                            if mat_id != ElementId.InvalidElementId:
+                                material_ids = [mat_id]
+                
+                for material_id in material_ids:
+                    material = doc.GetElement(material_id)
+                    if material:
+                        # Get thickness (layer-specific for walls, floors, etc.)
+                        thickness = get_material_thickness(element, material_id)
+                        
+                        # Calculate material-specific volume and area
+                        material_volume = calculate_material_volume(element, material_id, thickness)
+                        material_area = calculate_material_area(element, material_id)
+                        
+                        material_info = {
+                            # Element identification
+                            'ElementId': element.Id.IntegerValue,
+                            'ElementCategory': element.Category.Name if element.Category else "Unknown",
+                            
+                            # Family hierarchy
+                            'FamilyName': family_name,
+                            'FamilyType': family_type,
+                            'TypeId': element.GetTypeId().IntegerValue,
+                            
+                            # Material information
+                            'MaterialId': material_id.IntegerValue,
+                            'MaterialName': material.Name if material.Name else "Unnamed Material",
+                            'MaterialClass': material.MaterialClass if hasattr(material, 'MaterialClass') else "Unknown",
                             'MaterialCategory': material.MaterialCategory if hasattr(material, 'MaterialCategory') else "Unknown",
                             
                             # Thickness and quantities
@@ -138,8 +214,14 @@ def get_family_name(element):
         return "Unknown"
 
 def get_family_type(element):
-    """Get family type name from element"""
+    """Get family type name from element using 'Family and Type' parameter"""
     try:
+        # First try to get "Family and Type" parameter
+        family_type_param = element.LookupParameter("Family and Type")
+        if family_type_param and family_type_param.HasValue:
+            return family_type_param.AsValueString()
+        
+        # Fallback methods if "Family and Type" parameter doesn't exist
         if hasattr(element, 'Symbol') and element.Symbol:
             return element.Symbol.Name
         elif hasattr(element, 'WallType'):
@@ -333,6 +415,82 @@ def get_element_location(element):
 
 def save_to_csv(material_data):
     """Save comprehensive material data to CSV file with semicolon delimiter"""
+    try:
+        save_dialog = SaveFileDialog()
+        save_dialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+        save_dialog.FilterIndex = 1
+        save_dialog.RestoreDirectory = True
+        save_dialog.InitialDirectory = os.path.expanduser("~\\Documents")
+        
+        # Updated timestamp format: yyyymmdd hhmm
+        timestamp = datetime.now().strftime("%Y%m%d %H%M")
+        save_dialog.FileName = "ESG_Material_Export_{}".format(timestamp)
+        
+        if save_dialog.ShowDialog() == DialogResult.OK:
+            file_path = save_dialog.FileName
+            
+            with open(file_path, 'wb') as csvfile:
+                if material_data:
+                    fieldnames = material_data[0].keys()
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames, 
+                                          delimiter=';', lineterminator='\n')
+                    writer.writeheader()
+                    for material in material_data:
+                        writer.writerow(material)
+                else:
+                    writer = csv.writer(csvfile, delimiter=';', lineterminator='\n')
+                    headers = [
+                        'ElementId', 'ElementCategory', 'FamilyName', 'FamilyType', 'TypeId',
+                        'MaterialId', 'MaterialName', 'MaterialClass',
+                        'Thickness_mm', 'MaterialVolume_m3', 'MaterialArea_m2', 
+                        'ElementTotalVolume_m3', 'ElementTotalArea_m2'
+                    ]
+                    writer.writerow(headers)
+            
+            return file_path, len(material_data)
+        else:
+            return None, 0
+            
+    except Exception as e:
+        raise Exception("Error saving CSV file: {}".format(str(e)))    """Save comprehensive material data to CSV file with semicolon delimiter"""
+    try:
+        save_dialog = SaveFileDialog()
+        save_dialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+        save_dialog.FilterIndex = 1
+        save_dialog.RestoreDirectory = True
+        save_dialog.InitialDirectory = os.path.expanduser("~\\Documents")
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_dialog.FileName = "ESG_Material_Export_{}".format(timestamp)
+        
+        if save_dialog.ShowDialog() == DialogResult.OK:
+            file_path = save_dialog.FileName
+            
+            with open(file_path, 'wb') as csvfile:
+                if material_data:
+                    fieldnames = material_data[0].keys()
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames, 
+                                          delimiter=';', lineterminator='\n')
+                    writer.writeheader()
+                    for material in material_data:
+                        writer.writerow(material)
+                else:
+                    writer = csv.writer(csvfile, delimiter=';', lineterminator='\n')
+                    # Updated headers - removed unwanted variables
+                    headers = [
+                        'ElementId', 'ElementCategory', 'FamilyName', 'FamilyType', 'TypeId',
+                        'MaterialId', 'MaterialName', 'MaterialClass',
+                        'Thickness_mm', 'MaterialVolume_m3', 'MaterialArea_m2', 
+                        'ElementTotalVolume_m3', 'ElementTotalArea_m2'
+                    ]
+                    writer.writerow(headers)
+            
+            return file_path, len(material_data)
+        else:
+            return None, 0
+            
+    except Exception as e:
+        raise Exception("Error saving CSV file: {}".format(str(e)))    """Save comprehensive material data to CSV file with semicolon delimiter"""
     try:
         save_dialog = SaveFileDialog()
         save_dialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
