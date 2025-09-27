@@ -7,6 +7,10 @@ __author__ = "Jens Damm & Hans Bohn Svendsen"
 
 # Import required modules
 from pyrevit import forms
+from pyrevit.framework import List
+from pyrevit.revit import HOST_APP
+from pyrevit.coreutils import Timer
+from pyrevit.output import get_output
 import clr
 import csv
 import os
@@ -26,6 +30,9 @@ from Autodesk.Revit.UI import *
 # Get current Revit application and document
 uidoc = __revit__.ActiveUIDocument
 doc = __revit__.ActiveUIDocument.Document
+
+# Get output window for progress updates
+output = get_output()
 
 def format_number(value, decimals=5):
     """Format a number to a specific number of decimal places, removing trailing zeros"""
@@ -109,11 +116,29 @@ def get_comprehensive_material_data():
     try:
         # Get all elements that have materials
         elements = FilteredElementCollector(doc).WhereElementIsNotElementType().ToElements()
-        for element in elements:
+        total_elements = len(elements)
+        
+        output.print_md("## Starting Material Data Collection")
+        output.print_md("**Total elements to process:** {}".format(total_elements))
+        
+        # Initialize progress tracking
+        processed_elements = 0
+        material_records = 0
+        
+        # Process elements with progress updates
+        for i, element in enumerate(elements):
             try:
+                # Update progress every 50 elements or at milestones
+                if i % 50 == 0 or i == total_elements - 1:
+                    progress_percent = int((i + 1) * 100 / total_elements)
+                    output.update_progress(i + 1, total_elements)
+                    print("Processing element {} of {} ({}%) - {} material records so far".format(
+                        i + 1, total_elements, progress_percent, material_records))
+                
                 # Skip elements without geometry or materials
                 if not element.Category:
                     continue
+                
                 # Get family and type information
                 family_name = get_family_name(element)
                 family_type = get_family_type(element)
@@ -136,6 +161,7 @@ def get_comprehensive_material_data():
                             mat_id = type_material_id.AsElementId()
                             if mat_id != ElementId.InvalidElementId:
                                 material_ids = [mat_id]
+                
                 for material_id in material_ids:
                     material = doc.GetElement(material_id)
                     if material:
@@ -172,12 +198,25 @@ def get_comprehensive_material_data():
                         }
                         
                         material_usage_data.append(material_info)
+                        material_records += 1
+                
+                processed_elements += 1
+                
             except Exception as e:
                 # Skip problematic elements but continue processing
                 continue
+        
+        # Final progress update
+        output.print_md("## Collection Complete!")
+        output.print_md("**Elements processed:** {}".format(processed_elements))
+        output.print_md("**Material records created:** {}".format(material_records))
+        
     except Exception as e:
         raise Exception("Error collecting comprehensive material data: {}".format(str(e)))
+    
     return material_usage_data
+
+# [Keep all the other functions unchanged - get_family_name, get_family_type, etc.]
 
 def get_family_name(element):
     """Get family name from element"""
@@ -426,13 +465,23 @@ def save_to_csv(material_data):
         save_dialog.FileName = "ESG_Material_Export_{}".format(timestamp)
         if save_dialog.ShowDialog() == DialogResult.OK:
             file_path = save_dialog.FileName
+            
+            # Show progress for CSV writing
+            output.print_md("## Writing CSV File...")
+            print("Writing {} material records to CSV...".format(len(material_data)))
+            
             with open(file_path, 'wb') as csvfile:
                 if material_data:
                     fieldnames = material_data[0].keys()
                     writer = csv.DictWriter(csvfile, fieldnames=fieldnames,
                                           delimiter=';', lineterminator='\n')
                     writer.writeheader()
-                    for material in material_data:
+                    
+                    # Write data with progress updates
+                    for i, material in enumerate(material_data):
+                        if i % 500 == 0:  # Update every 500 records
+                            progress_percent = int((i + 1) * 100 / len(material_data))
+                            print("Writing record {} of {} ({}%)".format(i + 1, len(material_data), progress_percent))
                         writer.writerow(material)
                 else:
                     writer = csv.writer(csvfile, delimiter=';', lineterminator='\n')
@@ -444,6 +493,8 @@ def save_to_csv(material_data):
                         'ElementTotalVolume_m3', 'ElementTotalArea_m2'
                     ]
                     writer.writerow(headers)
+            
+            output.print_md("## CSV Export Complete!")
             return file_path, len(material_data)
         else:
             return None, 0
@@ -460,14 +511,17 @@ def main():
             MessageBoxIcon.Question
         )
         if result == DialogResult.Yes:
-            MessageBox.Show(
-                "Collecting comprehensive material data from the model...\n\nThis may take a moment.",
-                "Processing",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information
-            )
-            # Use the new comprehensive function
+            # Start timer
+            timer = Timer()
+            
+            # Clear output window and show progress
+            output.close_others()
+            output.print_md("# ESG Material Data Export")
+            output.print_md("**Started:** {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            
+            # Use the new comprehensive function with progress
             material_data = get_comprehensive_material_data()
+            
             if not material_data:
                 MessageBox.Show(
                     "No materials found in the current model.",
@@ -476,11 +530,22 @@ def main():
                     MessageBoxIcon.Warning
                 )
                 return
+            
             file_path, count = save_to_csv(material_data)
+            
+            # Stop timer and show results
+            timer.stop()
+            
             if file_path:
+                output.print_md("## Export Results")
+                output.print_md("**File:** {}".format(file_path))
+                output.print_md("**Records:** {}".format(count))
+                output.print_md("**Time:** {} seconds".format(timer.get_time()))
+                
                 MessageBox.Show(
                     "Export completed successfully!\n\n" +
                     "Material records exported: {}\n".format(count) +
+                    "Processing time: {} seconds\n".format(timer.get_time()) +
                     "File saved to:\n{}".format(file_path),
                     "Export Success",
                     MessageBoxButtons.OK,
