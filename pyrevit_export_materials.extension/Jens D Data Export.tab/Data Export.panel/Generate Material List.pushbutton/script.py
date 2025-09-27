@@ -28,6 +28,64 @@ uidoc = __revit__.ActiveUIDocument
 doc = __revit__.ActiveUIDocument.Document
 
 def get_element_type_name(element):
+    """Get the element type name"""
+    try:
+        # Debug: Check if element has TypeId
+        type_id = element.GetTypeId()
+        if type_id == ElementId.InvalidElementId:
+            return "No TypeId"
+        
+        # Method 1: Direct type lookup
+        element_type = doc.GetElement(type_id)
+        if element_type:
+            # Try different ways to get the name
+            if hasattr(element_type, 'Name'):
+                name = element_type.Name
+                if name and name.strip():  # Check if name exists and is not empty
+                    return name
+            
+            # Try get_Name() method if Name property doesn't work
+            if hasattr(element_type, 'get_Name'):
+                try:
+                    name = element_type.get_Name()
+                    if name and name.strip():
+                        return name
+                except:
+                    pass
+            
+            # Try LookupParameter for "Type Name"
+            try:
+                type_name_param = element_type.LookupParameter("Type Name")
+                if type_name_param and type_name_param.HasValue:
+                    return type_name_param.AsString()
+            except:
+                pass
+            
+            # Try to get the element type's category and ID as fallback
+            try:
+                if element_type.Category:
+                    return "{} - ID {}".format(element_type.Category.Name, element_type.Id.IntegerValue)
+                else:
+                    return "Type ID {}".format(element_type.Id.IntegerValue)
+            except:
+                pass
+        
+        # Method 2: Try getting from Symbol (for family instances)
+        if hasattr(element, 'Symbol') and element.Symbol:
+            return element.Symbol.Name
+        
+        # Method 3: Try specific element type properties
+        if hasattr(element, 'WallType') and element.WallType:
+            return element.WallType.Name
+        elif hasattr(element, 'FloorType') and element.FloorType:
+            return element.FloorType.Name
+        elif hasattr(element, 'RoofType') and element.RoofType:
+            return element.RoofType.Name
+        
+        return "No type found"
+        
+    except Exception as e:
+        return "Exception: {}".format(str(e))
     """Get the element type name with debugging"""
     try:
         # Debug: Check if element has TypeId
@@ -59,8 +117,8 @@ def get_element_type_name(element):
         
     except Exception as e:
         return "Exception: {}".format(str(e))
-    
-      
+
+
 def get_comprehensive_material_data():
     material_usage_data = []
     try:
