@@ -39,6 +39,7 @@ def format_number(value, decimals=5):
         return formatted if formatted else "0"
     except:
         return "N/A"
+
 def get_element_type_name(element):
     """Get the element type name"""
     try:
@@ -164,132 +165,6 @@ def get_comprehensive_material_data():
                 continue
     except Exception as e:
         raise Exception("Error collecting comprehensive material data: {}".format(str(e)))
-    return material_usage_data    material_usage_data = []
-    try:
-        # Get all elements that have materials
-        elements = FilteredElementCollector(doc).WhereElementIsNotElementType().ToElements()
-        for element in elements:
-            try:
-                # Skip elements without geometry or materials
-                if not element.Category:
-                    continue
-                # Get family and type information
-                family_name = get_family_name(element)
-                family_type = get_family_type(element)
-                element_type = get_element_type_name(element)  # NEW: Add Type
-                # Get element geometry for area/volume calculations
-                element_volume = get_element_volume(element)
-                element_area = get_element_area(element)
-                # Get materials from the element
-                material_ids = get_element_material_ids(element)
-                if not material_ids:
-                    # If no specific materials found, try to get from element type
-                    element_type_obj = doc.GetElement(element.GetTypeId())
-                    if element_type_obj:
-                        type_material_id = element_type_obj.LookupParameter("Material")
-                        if type_material_id and type_material_id.HasValue:
-                            mat_id = type_material_id.AsElementId()
-                            if mat_id != ElementId.InvalidElementId:
-                                material_ids = [mat_id]
-                for material_id in material_ids:
-                    material = doc.GetElement(material_id)
-                    if material:
-                        # Get thickness (layer-specific for walls, floors, etc.)
-                        thickness = get_material_thickness(element, material_id)
-                        # Calculate material-specific volume and area
-                        material_volume = calculate_material_volume(element, material_id, thickness)
-                        material_area = calculate_material_area(element, material_id)
-                        
-                        # ENSURE ALL NUMERICAL VALUES ARE PROPERLY ROUNDED
-                        material_info = {
-                            # Element identification
-                            'ElementId': element.Id.IntegerValue,
-                            'ElementCategory': element.Category.Name if element.Category else "Unknown",
-                            # Family hierarchy
-                            'FamilyName': family_name,
-                            'FamilyType': family_type,
-                            'Type': element_type,  # NEW: Add Type variable
-                            'TypeId': element.GetTypeId().IntegerValue,
-                            # Material information
-                            'MaterialId': material_id.IntegerValue,
-                            'MaterialName': material.Name if material.Name else "Unnamed Material",
-                            'MaterialClass': material.MaterialClass if hasattr(material, 'MaterialClass') else "Unknown",
-                            # Thickness and quantities - FORCE ROUNDING HERE
-                            'Thickness_mm': thickness if thickness == "N/A" else round(float(thickness), 5),
-                            'MaterialVolume_m3': material_volume if material_volume == "N/A" else round(float(material_volume), 5),
-                            'MaterialArea_m2': material_area if material_area == "N/A" else round(float(material_area), 5),
-                            'ElementTotalVolume_m3': element_volume if element_volume == "N/A" else round(float(element_volume), 5),
-                            'ElementTotalArea_m2': element_area if element_area == "N/A" else round(float(element_area), 5)
-                        }
-                        
-                        material_usage_data.append(material_info)
-            except Exception as e:
-                # Skip problematic elements but continue processing
-                continue
-    except Exception as e:
-        raise Exception("Error collecting comprehensive material data: {}".format(str(e)))
-    return material_usage_data
-    material_usage_data = []
-    try:
-        # Get all elements that have materials
-        elements = FilteredElementCollector(doc).WhereElementIsNotElementType().ToElements()
-        for element in elements:
-            try:
-                # Skip elements without geometry or materials
-                if not element.Category:
-                    continue
-                # Get family and type information
-                family_name = get_family_name(element)
-                family_type = get_family_type(element)
-                element_type = get_element_type_name(element)  # NEW: Add Type
-                # Get element geometry for area/volume calculations
-                element_volume = get_element_volume(element)
-                element_area = get_element_area(element)
-                # Get materials from the element
-                material_ids = get_element_material_ids(element)
-                if not material_ids:
-                    # If no specific materials found, try to get from element type
-                    element_type_obj = doc.GetElement(element.GetTypeId())
-                    if element_type_obj:
-                        type_material_id = element_type_obj.LookupParameter("Material")
-                        if type_material_id and type_material_id.HasValue:
-                            mat_id = type_material_id.AsElementId()
-                            if mat_id != ElementId.InvalidElementId:
-                                material_ids = [mat_id]
-                for material_id in material_ids:
-                    material = doc.GetElement(material_id)
-                    if material:
-                        # Get thickness (layer-specific for walls, floors, etc.)
-                        thickness = get_material_thickness(element, material_id)
-                        # Calculate material-specific volume and area
-                        material_volume = calculate_material_volume(element, material_id, thickness)
-                        material_area = calculate_material_area(element, material_id)
-                        material_info = {
-                            # Element identification
-                            'ElementId': element.Id.IntegerValue,
-                            'ElementCategory': element.Category.Name if element.Category else "Unknown",
-                            # Family hierarchy
-                            'FamilyName': family_name,
-                            'FamilyType': family_type,
-                            'Type': element_type,  # NEW: Add Type variable
-                            'TypeId': element.GetTypeId().IntegerValue,
-                            # Material information
-                            'MaterialId': material_id.IntegerValue,
-                            'MaterialName': material.Name if material.Name else "Unnamed Material",
-                            'MaterialClass': material.MaterialClass if hasattr(material, 'MaterialClass') else "Unknown",
-                            # Thickness and quantities - the core data for CO2 calculations
-                            'Thickness_mm': thickness,
-                            'MaterialVolume_m3': material_volume,
-                            'MaterialArea_m2': material_area,
-                            'ElementTotalVolume_m3': element_volume,
-                            'ElementTotalArea_m2': element_area
-                        }
-                        material_usage_data.append(material_info)
-            except Exception as e:
-                # Skip problematic elements but continue processing
-                continue
-    except Exception as e:
-        raise Exception("Error collecting comprehensive material data: {}".format(str(e)))
     return material_usage_data
 
 def get_family_name(element):
@@ -373,12 +248,12 @@ def get_material_thickness(element, material_id):
                         # Convert from internal units to mm
                         thickness_feet = layer.Width
                         thickness_mm = UnitUtils.ConvertFromInternalUnits(thickness_feet, UnitTypeId.Millimeters)
-                        return round(thickness_mm, 5)  # Changed to 5 decimals
+                        return round(thickness_mm, 5)
         # For other elements, try to get thickness parameter
         thickness_param = element.LookupParameter("Thickness")
         if thickness_param and thickness_param.HasValue:
             thickness_mm = UnitUtils.ConvertFromInternalUnits(thickness_param.AsDouble(), UnitTypeId.Millimeters)
-            return round(thickness_mm, 5)  # Changed to 5 decimals
+            return round(thickness_mm, 5)
         return "N/A"
     except:
         return "N/A"
@@ -393,13 +268,13 @@ def calculate_material_volume(element, material_id, thickness):
                 thickness_ft = UnitUtils.ConvertToInternalUnits(float(thickness), UnitTypeId.Millimeters)
                 volume_cuft = area_sqft * thickness_ft
                 volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
-                return round(volume_cum, 5)  # Changed to 5 decimals
+                return round(volume_cum, 5)
         # For other elements, use total volume
         volume_param = element.LookupParameter("Volume")
         if volume_param and volume_param.HasValue:
             volume_cuft = volume_param.AsDouble()
             volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
-            return round(volume_cum, 5)  # Changed to 5 decimals
+            return round(volume_cum, 5)
         return "N/A"
     except:
         return "N/A"
@@ -411,7 +286,7 @@ def calculate_material_area(element, material_id):
         if area_param and area_param.HasValue:
             area_sqft = area_param.AsDouble()
             area_sqm = UnitUtils.ConvertFromInternalUnits(area_sqft, UnitTypeId.SquareMeters)
-            return round(area_sqm, 5)  # Changed to 5 decimals
+            return round(area_sqm, 5)
         return "N/A"
     except:
         return "N/A"
@@ -423,7 +298,7 @@ def get_element_volume(element):
         if volume_param and volume_param.HasValue:
             volume_cuft = volume_param.AsDouble()
             volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
-            return round(volume_cum, 5)  # Changed to 5 decimals
+            return round(volume_cum, 5)
         return "N/A"
     except:
         return "N/A"
@@ -435,7 +310,7 @@ def get_element_area(element):
         if area_param and area_param.HasValue:
             area_sqft = area_param.AsDouble()
             area_sqm = UnitUtils.ConvertFromInternalUnits(area_sqft, UnitTypeId.SquareMeters)
-            return round(area_sqm, 5)  # Changed to 5 decimals
+            return round(area_sqm, 5)
         return "N/A"
     except:
         return "N/A"
