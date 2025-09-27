@@ -332,36 +332,23 @@ def get_element_area(element):
         return "N/A"
 
 def get_element_width(element):
-    """Get Width parameter from element - shows which method worked"""
+    """Get Width parameter from element - focuses on Properties panel Width"""
     try:
-        # List of possible width parameter names
-        width_params = [
-            "Width",
-            "Door Width", 
-            "Window Width",
-            "Rough Width",
-            "Rough Width (default)",
-            "Opening Width",
-            "Clear Width"
-        ]
+        # Method 1: Try "Width" parameter on INSTANCE first
+        w_param = element.LookupParameter("Width")
+        if w_param and w_param.HasValue:
+            width_mm = UnitUtils.ConvertFromInternalUnits(w_param.AsDouble(), UnitTypeId.Millimeters)
+            return "INSTANCE[Width]:{}".format(format_number(width_mm, 5))
         
-        # Method 1: Try instance parameters
-        for param_name in width_params:
-            w_param = element.LookupParameter(param_name)
-            if w_param and w_param.HasValue:
-                width_mm = UnitUtils.ConvertFromInternalUnits(w_param.AsDouble(), UnitTypeId.Millimeters)
-                return "INSTANCE[{}]:{}".format(param_name, format_number(width_mm, 5))
-        
-        # Method 2: Try TYPE parameters
+        # Method 2: Try "Width" parameter on TYPE 
         element_type = doc.GetElement(element.GetTypeId())
         if element_type:
-            for param_name in width_params:
-                w_param = element_type.LookupParameter(param_name)
-                if w_param and w_param.HasValue:
-                    width_mm = UnitUtils.ConvertFromInternalUnits(w_param.AsDouble(), UnitTypeId.Millimeters)
-                    return "TYPE[{}]:{}".format(param_name, format_number(width_mm, 5))
+            w_param = element_type.LookupParameter("Width")
+            if w_param and w_param.HasValue:
+                width_mm = UnitUtils.ConvertFromInternalUnits(w_param.AsDouble(), UnitTypeId.Millimeters)
+                return "TYPE[Width]:{}".format(format_number(width_mm, 5))
         
-        # Method 3: Try built-in DOOR_WIDTH parameter
+        # Method 3: Try built-in DOOR_WIDTH parameter (backup)
         try:
             width_param = element.get_Parameter(BuiltInParameter.DOOR_WIDTH)
             if width_param and width_param.HasValue:
@@ -370,7 +357,7 @@ def get_element_width(element):
         except:
             pass
         
-        # Method 4: Try built-in WINDOW_WIDTH parameter    
+        # Method 4: Try built-in WINDOW_WIDTH parameter (backup)
         try:
             width_param = element.get_Parameter(BuiltInParameter.WINDOW_WIDTH)
             if width_param and width_param.HasValue:
@@ -384,36 +371,23 @@ def get_element_width(element):
         return "ERROR"
 
 def get_element_height(element):
-    """Get Height parameter from element - shows which method worked"""
+    """Get Height parameter from element - focuses on Properties panel Height"""
     try:
-        # List of possible height parameter names
-        height_params = [
-            "Height",
-            "Door Height",
-            "Window Height", 
-            "Rough Height",
-            "Rough Height (default)",
-            "Opening Height",
-            "Clear Height"
-        ]
+        # Method 1: Try "Height" parameter on INSTANCE first
+        h_param = element.LookupParameter("Height")
+        if h_param and h_param.HasValue:
+            height_mm = UnitUtils.ConvertFromInternalUnits(h_param.AsDouble(), UnitTypeId.Millimeters)
+            return "INSTANCE[Height]:{}".format(format_number(height_mm, 5))
         
-        # Method 1: Try instance parameters
-        for param_name in height_params:
-            h_param = element.LookupParameter(param_name)
-            if h_param and h_param.HasValue:
-                height_mm = UnitUtils.ConvertFromInternalUnits(h_param.AsDouble(), UnitTypeId.Millimeters)
-                return "INSTANCE[{}]:{}".format(param_name, format_number(height_mm, 5))
-        
-        # Method 2: Try TYPE parameters
+        # Method 2: Try "Height" parameter on TYPE
         element_type = doc.GetElement(element.GetTypeId())
         if element_type:
-            for param_name in height_params:
-                h_param = element_type.LookupParameter(param_name)
-                if h_param and h_param.HasValue:
-                    height_mm = UnitUtils.ConvertFromInternalUnits(h_param.AsDouble(), UnitTypeId.Millimeters)
-                    return "TYPE[{}]:{}".format(param_name, format_number(height_mm, 5))
+            h_param = element_type.LookupParameter("Height")
+            if h_param and h_param.HasValue:
+                height_mm = UnitUtils.ConvertFromInternalUnits(h_param.AsDouble(), UnitTypeId.Millimeters)
+                return "TYPE[Height]:{}".format(format_number(height_mm, 5))
         
-        # Method 3: Try built-in DOOR_HEIGHT parameter
+        # Method 3: Try built-in DOOR_HEIGHT parameter (backup)
         try:
             height_param = element.get_Parameter(BuiltInParameter.DOOR_HEIGHT)
             if height_param and height_param.HasValue:
@@ -422,7 +396,7 @@ def get_element_height(element):
         except:
             pass
         
-        # Method 4: Try built-in WINDOW_HEIGHT parameter    
+        # Method 4: Try built-in WINDOW_HEIGHT parameter (backup)
         try:
             height_param = element.get_Parameter(BuiltInParameter.WINDOW_HEIGHT)
             if height_param and height_param.HasValue:
@@ -436,64 +410,42 @@ def get_element_height(element):
         return "ERROR"
 
 def get_rough_width(element):
-    """Get Rough Width parameter from element - shows which method worked"""
+    """Get Rough Width parameter from element - simplified approach"""
     try:
-        # List of possible rough width parameter names
-        rough_width_params = [
-            "Rough Width (default)",
-            "Rough Width",
-            "RoughWidth",
-            "Rough Opening Width",
-            "Opening Width"
-        ]
+        # Method 1: Try "Rough Width" parameter on INSTANCE first
+        rw_param = element.LookupParameter("Rough Width")
+        if rw_param and rw_param.HasValue:
+            rough_w_mm = UnitUtils.ConvertFromInternalUnits(rw_param.AsDouble(), UnitTypeId.Millimeters)
+            return "INSTANCE[Rough Width]:{}".format(format_number(rough_w_mm, 5))
         
-        # Method 1: Try instance parameters
-        for param_name in rough_width_params:
-            rw_param = element.LookupParameter(param_name)
-            if rw_param and rw_param.HasValue:
-                rough_w_mm = UnitUtils.ConvertFromInternalUnits(rw_param.AsDouble(), UnitTypeId.Millimeters)
-                return "INSTANCE[{}]:{}".format(param_name, format_number(rough_w_mm, 5))
-        
-        # Method 2: Try TYPE parameters
+        # Method 2: Try "Rough Width" parameter on TYPE
         element_type = doc.GetElement(element.GetTypeId())
         if element_type:
-            for param_name in rough_width_params:
-                rw_param = element_type.LookupParameter(param_name)
-                if rw_param and rw_param.HasValue:
-                    rough_w_mm = UnitUtils.ConvertFromInternalUnits(rw_param.AsDouble(), UnitTypeId.Millimeters)
-                    return "TYPE[{}]:{}".format(param_name, format_number(rough_w_mm, 5))
+            rw_param = element_type.LookupParameter("Rough Width")
+            if rw_param and rw_param.HasValue:
+                rough_w_mm = UnitUtils.ConvertFromInternalUnits(rw_param.AsDouble(), UnitTypeId.Millimeters)
+                return "TYPE[Rough Width]:{}".format(format_number(rough_w_mm, 5))
         
         return "N/A"
     except:
         return "ERROR"
 
 def get_rough_height(element):
-    """Get Rough Height parameter from element - shows which method worked"""
+    """Get Rough Height parameter from element - simplified approach"""
     try:
-        # List of possible rough height parameter names
-        rough_height_params = [
-            "Rough Height (default)",
-            "Rough Height",
-            "RoughHeight", 
-            "Rough Opening Height",
-            "Opening Height"
-        ]
+        # Method 1: Try "Rough Height" parameter on INSTANCE first
+        rh_param = element.LookupParameter("Rough Height")
+        if rh_param and rh_param.HasValue:
+            rough_h_mm = UnitUtils.ConvertFromInternalUnits(rh_param.AsDouble(), UnitTypeId.Millimeters)
+            return "INSTANCE[Rough Height]:{}".format(format_number(rough_h_mm, 5))
         
-        # Method 1: Try instance parameters
-        for param_name in rough_height_params:
-            rh_param = element.LookupParameter(param_name)
-            if rh_param and rh_param.HasValue:
-                rough_h_mm = UnitUtils.ConvertFromInternalUnits(rh_param.AsDouble(), UnitTypeId.Millimeters)
-                return "INSTANCE[{}]:{}".format(param_name, format_number(rough_h_mm, 5))
-        
-        # Method 2: Try TYPE parameters
+        # Method 2: Try "Rough Height" parameter on TYPE
         element_type = doc.GetElement(element.GetTypeId())
         if element_type:
-            for param_name in rough_height_params:
-                rh_param = element_type.LookupParameter(param_name)
-                if rh_param and rh_param.HasValue:
-                    rough_h_mm = UnitUtils.ConvertFromInternalUnits(rh_param.AsDouble(), UnitTypeId.Millimeters)
-                    return "TYPE[{}]:{}".format(param_name, format_number(rough_h_mm, 5))
+            rh_param = element_type.LookupParameter("Rough Height")
+            if rh_param and rh_param.HasValue:
+                rough_h_mm = UnitUtils.ConvertFromInternalUnits(rh_param.AsDouble(), UnitTypeId.Millimeters)
+                return "TYPE[Rough Height]:{}".format(format_number(rough_h_mm, 5))
         
         return "N/A"
     except:
