@@ -44,7 +44,6 @@ def format_number(value, decimals=5):
     except:
         return "N/A"
 
-
 def get_element_type_name(element):
     """Get the element type name"""
     try:
@@ -125,6 +124,8 @@ def get_comprehensive_material_data():
                 # Get NEW parameters
                 element_width = get_element_width(element)
                 element_height = get_element_height(element)
+                rough_width = get_rough_width(element)
+                rough_height = get_rough_height(element)
                 export_guid = get_export_guid(element)
                 # Get materials from the element
                 material_ids = get_element_material_ids(element)
@@ -151,15 +152,17 @@ def get_comprehensive_material_data():
                             # Element identification
                             'ElementId': element.Id.IntegerValue,
                             'ElementCategory': element.Category.Name if element.Category else "Unknown",
-                            'ExportGUID': export_guid,  # NEW
+                            'ExportGUID': export_guid,
                             # Family hierarchy
                             'FamilyName': family_name,
                             'FamilyType': family_type,
                             'Type': element_type,
                             'TypeId': element.GetTypeId().IntegerValue,
-                            # NEW door parameters
-                            'ElementWidth_mm': element_width,  # NEW
-                            'ElementHeight_mm': element_height,  # NEW
+                            # NEW dimension parameters
+                            'Width_mm': element_width,
+                            'Height_mm': element_height,
+                            'RoughWidth_mm': rough_width,
+                            'RoughHeight_mm': rough_height,
                             # Material information
                             'MaterialId': material_id.IntegerValue,
                             'MaterialName': material.Name if material.Name else "Unnamed Material",
@@ -327,78 +330,51 @@ def get_element_area(element):
         return "N/A"
     except:
         return "N/A"
-    
+
 def get_element_width(element):
-    """Get element width parameter - works for doors, windows, and other elements"""
+    """Get Width parameter from element"""
     try:
-        # Try door width first
-        width_param = element.get_Parameter(BuiltInParameter.DOOR_WIDTH)
-        if width_param and width_param.HasValue:
-            width_feet = width_param.AsDouble()
-            width_mm = UnitUtils.ConvertFromInternalUnits(width_feet, UnitTypeId.Millimeters)
+        w_param = element.LookupParameter("Width")
+        if w_param and w_param.HasValue:
+            width_mm = UnitUtils.ConvertFromInternalUnits(w_param.AsDouble(), UnitTypeId.Millimeters)
             return format_number(width_mm, 5)
-        
-        # Try window width
-        width_param = element.get_Parameter(BuiltInParameter.WINDOW_WIDTH)
-        if width_param and width_param.HasValue:
-            width_feet = width_param.AsDouble()
-            width_mm = UnitUtils.ConvertFromInternalUnits(width_feet, UnitTypeId.Millimeters)
-            return format_number(width_mm, 5)
-        
-        # Try generic width parameter
-        width_param = element.LookupParameter("Width")
-        if width_param and width_param.HasValue:
-            width_feet = width_param.AsDouble()
-            width_mm = UnitUtils.ConvertFromInternalUnits(width_feet, UnitTypeId.Millimeters)
-            return format_number(width_mm, 5)
-        
-        # Try wall width (thickness)
-        if hasattr(element, 'WallType'):
-            width_param = element.LookupParameter("Width")
-            if width_param and width_param.HasValue:
-                width_feet = width_param.AsDouble()
-                width_mm = UnitUtils.ConvertFromInternalUnits(width_feet, UnitTypeId.Millimeters)
-                return format_number(width_mm, 5)
-        
         return "N/A"
     except:
         return "N/A"
 
 def get_element_height(element):
-    """Get element height parameter - works for doors, windows, walls, and other elements"""
+    """Get Height parameter from element"""
     try:
-        # Try door height first
-        height_param = element.get_Parameter(BuiltInParameter.DOOR_HEIGHT)
-        if height_param and height_param.HasValue:
-            height_feet = height_param.AsDouble()
-            height_mm = UnitUtils.ConvertFromInternalUnits(height_feet, UnitTypeId.Millimeters)
+        h_param = element.LookupParameter("Height")
+        if h_param and h_param.HasValue:
+            height_mm = UnitUtils.ConvertFromInternalUnits(h_param.AsDouble(), UnitTypeId.Millimeters)
             return format_number(height_mm, 5)
-        
-        # Try window height
-        height_param = element.get_Parameter(BuiltInParameter.WINDOW_HEIGHT)
-        if height_param and height_param.HasValue:
-            height_feet = height_param.AsDouble()
-            height_mm = UnitUtils.ConvertFromInternalUnits(height_feet, UnitTypeId.Millimeters)
-            return format_number(height_mm, 5)
-        
-        # Try generic height parameter
-        height_param = element.LookupParameter("Height")
-        if height_param and height_param.HasValue:
-            height_feet = height_param.AsDouble()
-            height_mm = UnitUtils.ConvertFromInternalUnits(height_feet, UnitTypeId.Millimeters)
-            return format_number(height_mm, 5)
-        
-        # Try wall height
-        if hasattr(element, 'WallType'):
-            height_param = element.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM)
-            if height_param and height_param.HasValue:
-                height_feet = height_param.AsDouble()
-                height_mm = UnitUtils.ConvertFromInternalUnits(height_feet, UnitTypeId.Millimeters)
-                return format_number(height_mm, 5)
-        
         return "N/A"
     except:
         return "N/A"
+
+def get_rough_width(element):
+    """Get Rough Width (default) parameter from element"""
+    try:
+        rw_param = element.LookupParameter("Rough Width (default)")
+        if rw_param and rw_param.HasValue:
+            rough_w_mm = UnitUtils.ConvertFromInternalUnits(rw_param.AsDouble(), UnitTypeId.Millimeters)
+            return format_number(rough_w_mm, 5)
+        return "N/A"
+    except:
+        return "N/A"
+
+def get_rough_height(element):
+    """Get Rough Height (default) parameter from element"""
+    try:
+        rh_param = element.LookupParameter("Rough Height (default)")
+        if rh_param and rh_param.HasValue:
+            rough_h_mm = UnitUtils.ConvertFromInternalUnits(rh_param.AsDouble(), UnitTypeId.Millimeters)
+            return format_number(rough_h_mm, 5)
+        return "N/A"
+    except:
+        return "N/A"
+
 def get_export_guid(element):
     """Get export GUID for element"""
     try:
@@ -430,10 +406,9 @@ def save_to_csv(material_data):
                         writer.writerow(material)
                 else:
                     writer = csv.writer(csvfile, delimiter=';', lineterminator='\n')
-                    # Updated headers to include 'Type'
                     headers = [
                         'ElementId', 'ElementCategory', 'ExportGUID', 'FamilyName', 'FamilyType', 'Type', 'TypeId',
-                        'ElementWidth_mm', 'ElementHeight_mm',
+                        'Width_mm', 'Height_mm', 'RoughWidth_mm', 'RoughHeight_mm',
                         'MaterialId', 'MaterialName', 'MaterialClass',
                         'Thickness_mm', 'MaterialVolume_m3', 'MaterialArea_m2',
                         'ElementTotalVolume_m3', 'ElementTotalArea_m2'
