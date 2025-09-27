@@ -264,6 +264,29 @@ def get_material_thickness(element, material_id):
                         # Convert from internal units to mm
                         thickness_feet = layer.Width
                         thickness_mm = UnitUtils.ConvertFromInternalUnits(thickness_feet, UnitTypeId.Millimeters)
+                        return round(thickness_mm, 5)  # Changed to 5 decimals
+        
+        # For other elements, try to get thickness parameter
+        thickness_param = element.LookupParameter("Thickness")
+        if thickness_param and thickness_param.HasValue:
+            thickness_mm = UnitUtils.ConvertFromInternalUnits(thickness_param.AsDouble(), UnitTypeId.Millimeters)
+            return round(thickness_mm, 5)  # Changed to 5 decimals
+        
+        return "N/A"
+    except:
+        return "N/A"    """Get thickness of specific material in element"""
+    try:
+        # For compound structures (walls, floors, roofs)
+        element_type = doc.GetElement(element.GetTypeId())
+        if hasattr(element_type, 'GetCompoundStructure'):
+            compound_structure = element_type.GetCompoundStructure()
+            if compound_structure:
+                layers = compound_structure.GetLayers()
+                for layer in layers:
+                    if layer.MaterialId == material_id:
+                        # Convert from internal units to mm
+                        thickness_feet = layer.Width
+                        thickness_mm = UnitUtils.ConvertFromInternalUnits(thickness_feet, UnitTypeId.Millimeters)
                         return round(thickness_mm, 2)
         # For other elements, try to get thickness parameter
         thickness_param = element.LookupParameter("Thickness")
@@ -276,6 +299,26 @@ def get_material_thickness(element, material_id):
   
 def calculate_material_volume(element, material_id, thickness):
     """Calculate volume of specific material in element"""
+    try:
+        if hasattr(element, 'WallType') or hasattr(element, 'FloorType'):
+            area_param = element.LookupParameter("Area")
+            if area_param and area_param.HasValue and thickness != "N/A":
+                area_sqft = area_param.AsDouble()
+                thickness_ft = UnitUtils.ConvertToInternalUnits(float(thickness), UnitTypeId.Millimeters)
+                volume_cuft = area_sqft * thickness_ft
+                volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
+                return round(volume_cum, 5)  # Changed to 5 decimals
+        
+        # For other elements, use total volume
+        volume_param = element.LookupParameter("Volume")
+        if volume_param and volume_param.HasValue:
+            volume_cuft = volume_param.AsDouble()
+            volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
+            return round(volume_cum, 5)  # Changed to 5 decimals
+        
+        return "N/A"
+    except:
+        return "N/A"    """Calculate volume of specific material in element"""
     try:
         if hasattr(element, 'WallType') or hasattr(element, 'FloorType'):
             area_param = element.LookupParameter("Area")
@@ -302,6 +345,16 @@ def calculate_material_area(element, material_id):
         if area_param and area_param.HasValue:
             area_sqft = area_param.AsDouble()
             area_sqm = UnitUtils.ConvertFromInternalUnits(area_sqft, UnitTypeId.SquareMeters)
+            return round(area_sqm, 5)  # Changed to 5 decimals
+        return "N/A"
+    except:
+        return "N/A"
+    """Calculate area of specific material in element"""
+    try:
+        area_param = element.LookupParameter("Area")
+        if area_param and area_param.HasValue:
+            area_sqft = area_param.AsDouble()
+            area_sqm = UnitUtils.ConvertFromInternalUnits(area_sqft, UnitTypeId.SquareMeters)
             return round(area_sqm, 2)
         return "N/A"
     except:
@@ -314,7 +367,7 @@ def get_element_volume(element):
         if volume_param and volume_param.HasValue:
             volume_cuft = volume_param.AsDouble()
             volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
-            return round(volume_cum, 4)
+            return round(volume_cum, 5)  # Changed to 5 decimals
         return "N/A"
     except:
         return "N/A"
@@ -326,7 +379,7 @@ def get_element_area(element):
         if area_param and area_param.HasValue:
             area_sqft = area_param.AsDouble()
             area_sqm = UnitUtils.ConvertFromInternalUnits(area_sqft, UnitTypeId.SquareMeters)
-            return round(area_sqm, 2)
+            return round(area_sqm, 5)  # Changed to 5 decimals
         return "N/A"
     except:
         return "N/A"
