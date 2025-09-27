@@ -9,7 +9,6 @@ __author__ = "Jens Damm & Hans Bohn Svendsen"
 from pyrevit import forms
 from pyrevit.framework import List
 from pyrevit.revit import HOST_APP
-from pyrevit.coreutils import Timer
 from pyrevit.output import get_output
 import clr
 import csv
@@ -512,7 +511,7 @@ def main():
         )
         if result == DialogResult.Yes:
             # Start timer
-            timer = Timer()
+            start_time = time.time()
             
             # Clear output window and show progress
             output.close_others()
@@ -533,19 +532,93 @@ def main():
             
             file_path, count = save_to_csv(material_data)
             
-            # Stop timer and show results
-            timer.stop()
+            # Calculate elapsed time
+            end_time = time.time()
+            elapsed_time = round(end_time - start_time, 2)
             
             if file_path:
                 output.print_md("## Export Results")
                 output.print_md("**File:** {}".format(file_path))
                 output.print_md("**Records:** {}".format(count))
-                output.print_md("**Time:** {} seconds".format(timer.get_time()))
+                output.print_md("**Time:** {} seconds".format(elapsed_time))
                 
                 MessageBox.Show(
                     "Export completed successfully!\n\n" +
                     "Material records exported: {}\n".format(count) +
-                    "Processing time: {} seconds\n".format(timer.get_time()) +
+                    "Processing time: {} seconds\n".format(elapsed_time) +
+                    "File saved to:\n{}".format(file_path),
+                    "Export Success",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                )
+            else:
+                MessageBox.Show(
+                    "Export cancelled - no file was saved.",
+                    "Export Cancelled",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                )
+        else:
+            MessageBox.Show(
+                "Export cancelled by user.",
+                "Export Cancelled",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information
+            )
+    except Exception as e:
+        MessageBox.Show(
+            "An error occurred during export:\n\n{}".format(str(e)),
+            "Export Error",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Error
+        )
+
+def main():
+    """Main function that runs when the button is clicked"""
+    try:
+        result = MessageBox.Show(
+            "This will generate a comprehensive material list export for ESG/CO2 analysis.\n\nDo you want to proceed?",
+            "Export ESG Material Data",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question
+        )
+        if result == DialogResult.Yes:
+            # Start timer
+            start_time = time.time()
+            
+            # Clear output window and show progress
+            output.close_others()
+            output.print_md("# ESG Material Data Export")
+            output.print_md("**Started:** {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            
+            # Use the new comprehensive function with progress
+            material_data = get_comprehensive_material_data()
+            
+            if not material_data:
+                MessageBox.Show(
+                    "No materials found in the current model.",
+                    "No Data",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                )
+                return
+            
+            file_path, count = save_to_csv(material_data)
+            
+            # Calculate elapsed time
+            end_time = time.time()
+            elapsed_time = round(end_time - start_time, 2)
+            
+            if file_path:
+                output.print_md("## Export Results")
+                output.print_md("**File:** {}".format(file_path))
+                output.print_md("**Records:** {}".format(count))
+                output.print_md("**Time:** {} seconds".format(elapsed_time))
+                
+                MessageBox.Show(
+                    "Export completed successfully!\n\n" +
+                    "Material records exported: {}\n".format(count) +
+                    "Processing time: {} seconds\n".format(elapsed_time) +
                     "File saved to:\n{}".format(file_path),
                     "Export Success",
                     MessageBoxButtons.OK,
