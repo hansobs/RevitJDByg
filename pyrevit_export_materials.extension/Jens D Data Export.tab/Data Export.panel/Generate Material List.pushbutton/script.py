@@ -63,6 +63,92 @@ def get_material_color(material):
         return "Unknown"
   
 def save_to_csv(material_data):
+    """Save comprehensive material data to CSV file with semicolon delimiter"""
+    try:
+        save_dialog = SaveFileDialog()
+        save_dialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+        save_dialog.FilterIndex = 1
+        save_dialog.RestoreDirectory = True
+        save_dialog.InitialDirectory = os.path.expanduser("~\\Documents")
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_dialog.FileName = "ESG_Material_Export_{}".format(timestamp)
+        
+        if save_dialog.ShowDialog() == DialogResult.OK:
+            file_path = save_dialog.FileName
+            
+            with open(file_path, 'wb') as csvfile:
+                if material_data:
+                    fieldnames = material_data[0].keys()
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames, 
+                                          delimiter=';', lineterminator='\n')
+                    writer.writeheader()
+                    for material in material_data:
+                        writer.writerow(material)
+                else:
+                    writer = csv.writer(csvfile, delimiter=';', lineterminator='\n')
+                    # Headers for ESG/CO2 analysis
+                    headers = [
+                        'ElementId', 'ElementCategory', 'FamilyName', 'FamilyType', 'TypeId',
+                        'MaterialId', 'MaterialName', 'MaterialClass', 'MaterialCategory',
+                        'Thickness', 'MaterialVolume', 'MaterialArea', 'ElementTotalVolume', 'ElementTotalArea',
+                        'Density', 'ThermalConductivity', 'EstimatedMass',
+                        'EmbodiedCarbon', 'RecycledContent', 'Manufacturer',
+                        'Level', 'Location'
+                    ]
+                    writer.writerow(headers)
+            
+            return file_path, len(material_data)
+        else:
+            return None, 0
+            
+    except Exception as e:
+        raise Exception("Error saving CSV file: {}".format(str(e)))
+    """Save material data to CSV file with semicolon delimiter"""
+    try:
+        # Create save file dialog
+        save_dialog = SaveFileDialog()
+        save_dialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+        save_dialog.FilterIndex = 1
+        save_dialog.RestoreDirectory = True
+        
+        # Set default directory to user's Documents folder
+        save_dialog.InitialDirectory = os.path.expanduser("~\\Documents")
+        
+        # Set default filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_dialog.FileName = "Material_Export_{}".format(timestamp)
+        
+        # Show dialog
+        if save_dialog.ShowDialog() == DialogResult.OK:
+            file_path = save_dialog.FileName
+            
+            # Use Python's csv module with semicolon delimiter
+            with open(file_path, 'wb') as csvfile:  # Note: 'wb' mode for IronPython
+                if material_data:
+                    fieldnames = material_data[0].keys()
+                    # Set delimiter to semicolon
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames, 
+                                          delimiter=';', lineterminator='\n')
+                    writer.writeheader()
+                    for material in material_data:
+                        writer.writerow(material)
+                else:
+                    # Write empty file with headers if no data
+                    # Set delimiter to semicolon
+                    writer = csv.writer(csvfile, delimiter=';', lineterminator='\n')
+                    writer.writerow(['ElementId','ElementCategory','FamilyName','FamilyType','TypeId',
+                                   'MaterialId','MaterialName','MaterialClass','MaterialCategory',
+                                   'Thickness','MaterialVolume','MaterialArea','ElementTotalVolume',
+                                   'ElementTotalArea','Density','ThermalConductivity','EstimatedMass',
+                                   'EmbodiedCarbon','RecycledContent','Manufacturer','Level','Location'])
+            
+            return file_path, len(material_data)
+        else:
+            return None, 0
+            
+    except Exception as e:
+        raise Exception("Error saving CSV file: {}".format(str(e)))
     """Save material data to CSV file"""
     try:
         # Create save file dialog
