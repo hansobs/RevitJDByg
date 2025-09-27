@@ -51,6 +51,59 @@ def format_number(value, decimals=5):
     except:
         return "N/A"
 
+def get_material_layers(element):
+    """Returns all layers with material + thickness, including 'By Category'"""
+    results = []
+    try:
+        element_type = doc.GetElement(element.GetTypeId())
+        if hasattr(element_type, 'GetCompoundStructure'):
+            cs = element_type.GetCompoundStructure()
+            if cs:
+                layers = cs.GetLayers()
+                for i, layer in enumerate(layers):
+                    mat_id = layer.MaterialId
+                    if mat_id == ElementId.InvalidElementId:
+                        # By Category → create label with category
+                        mat_name = "By Category ({})".format(element.Category.Name)
+                        mat_id_for_export = "By_Category"
+                    else:
+                        mat = doc.GetElement(mat_id)
+                        mat_name = mat.Name if mat else "Unknown"
+                        mat_id_for_export = mat_id.IntegerValue
+                    
+                    thickness_mm = UnitUtils.ConvertFromInternalUnits(
+                        layer.Width, UnitTypeId.Millimeters
+                    )
+                    
+                    results.append({
+                        "LayerIndex": i,
+                        "MaterialId": mat_id_for_export,
+                        "MaterialName": mat_name,
+                        "Thickness_mm": round(thickness_mm, 2)
+                    })
+            else:
+                # fallback: try to get thickness parameter directly
+                t_param = element.LookupParameter("Thickness")
+                if t_param and t_param.HasValue:
+                    thickness_mm = UnitUtils.ConvertFromInternalUnits(
+                        t_param.AsDouble(), UnitTypeId.Millimeters
+                    )
+                    results.append({
+                        "LayerIndex": 0,
+                        "MaterialId": "N/A",
+                        "MaterialName": "N/A",
+                        "Thickness_mm": round(thickness_mm, 2)
+                    })
+    except Exception as e:
+        results.append({
+            "LayerIndex": -1,
+            "MaterialId": "Error",
+            "MaterialName": "Error",
+            "Thickness_mm": str(e)
+        })
+    
+    return results
+
 def get_element_type_name(element):
     """Get the element type name"""
     try:
@@ -150,26 +203,83 @@ def get_comprehensive_material_data():
                 element_width = get_element_width(element)
                 element_height = get_element_height(element)
                 export_guid = get_export_guid(element)
-                # Get materials from the element
-                material_ids = get_element_material_ids(element)
-                if not material_ids:
-                    # If no specific materials found, try to get from element type
-                    element_type_obj = doc.GetElement(element.GetTypeId())
-                    if element_type_obj:
-                        type_material_id = element_type_obj.LookupParameter("Material")
-                        if type_material_id and type_material_id.HasValue:
-                            mat_id = type_material_id.AsElementId()
-                            if mat_id != ElementId.InvalidElementId:
-                                material_ids = [mat_id]
                 
-                for material_id in material_ids:
-                    material = doc.GetElement(material_id)
-                    if material:
-                        # Get thickness (layer-specific for walls, floors, etc.)
-                        thickness = get_material_thickness(element, material_id)
-                        # Calculate material-specific volume and area
-                        material_volume = calculate_material_volume(element, material_id, thickness)
-                        material_area = calculate_material_area(element, material_id)
+                # NEW: Get material layers (handles By Category)
+                material_layers = get_material_layers(element)
+                
+                # If no layers found, try the old method as fallback
+                if not material_layers:
+                    material_ids = get_element_material_ids(element)
+                    if not material_ids:
+                        # If no specific materials found, try to get from element type
+                        element_type_obj = doc.GetElement(element.GetTypeId())
+                        if element_type_obj:
+                            type_material_id = element_type_obj.LookupParameter("Material")
+                            if type_material_id and type_material_id.HasValue:
+                                mat_id = type_material_id.AsElementId()
+                                if mat_id != ElementId.InvalidElementId:
+                                    material_ids = [mat_id]
+                    
+                    # Process old way for non-compound elements
+                    for material_id in material_ids:
+                        material = doc.GetElement(material_id)
+                        if material:
+                            # Get thickness (layer-specific for walls, floors, etc.)
+                            thickness = get_material_thickness(element, material_id)
+                            # Calculate material-specific volume and area
+                            material_volume = calculate_material_volume(element, material_id, thickness)
+                            material_area = calculate_material_area(element, material_id)
+                            
+                            # FORMAT ALL NUMERICAL VALUES PROPERLY
+                            material_info = {
+                                # Element identification
+                                'ElementId': element.Id.IntegerValue,
+                                'ElementCategory': element.Category.Name if element.Category else "Unknown",
+                                'ExportGUID': export_guid,
+                                # Family hierarchy
+                                'FamilyName': family_name,
+                                'FamilyType': family_type,
+                                'Type': element_type,
+                                'TypeId': element.GetTypeId().IntegerValue,
+                                # Dimension parameters
+                                'Width_mm': element_width,
+                                'Height_mm': element_height,
+                                # Layer information
+                                'LayerIndex': 0,
+                                # Material information
+                                'MaterialId': material_id.IntegerValue,
+                                'MaterialName': material.Name if material.Name else "Unnamed Material",
+                                'MaterialClass': material.MaterialClass if hasattr(material, 'MaterialClass') else "Unknown",
+                                # Thickness and quantities - PROPERLY FORMATTED
+                                'Thickness_mm': format_number(thickness, 5),
+                                'MaterialVolume_m3': format_number(material_volume, 5),
+                                'MaterialArea_m2': format_number(material_area, 5),
+                                'ElementTotalVolume_m3': format_number(element_volume, 5),
+                                'ElementTotalArea_m2': format_number(element_area, 5)
+                            }
+                            
+                            material_usage_data.append(material_info)
+                            material_records += 1
+                else:
+                    # NEW: Process using material layers
+                    for layer in material_layers:
+                        # Calculate material-specific volume and area for this layer
+                        if layer['MaterialId'] != "By_Category" and layer['MaterialId'] != "N/A" and layer['MaterialId'] != "Error":
+                            try:
+                                material_id = ElementId(int(layer['MaterialId']))
+                                material = doc.GetElement(material_id)
+                                material_class = material.MaterialClass if material and hasattr(material, 'MaterialClass') else "Unknown"
+                            except:
+                                material = None
+                                material_class = "Unknown"
+                        else:
+                            material = None
+                            material_class = "By Category" if layer['MaterialId'] == "By_Category" else "Unknown"
+                        
+                        # Calculate volume for this specific layer
+                        thickness = layer['Thickness_mm']
+                        material_volume = calculate_layer_volume(element, thickness)
+                        material_area = calculate_material_area(element, None)  # Use element area
                         
                         # FORMAT ALL NUMERICAL VALUES PROPERLY
                         material_info = {
@@ -185,10 +295,12 @@ def get_comprehensive_material_data():
                             # Dimension parameters
                             'Width_mm': element_width,
                             'Height_mm': element_height,
+                            # Layer information
+                            'LayerIndex': layer['LayerIndex'],
                             # Material information
-                            'MaterialId': material_id.IntegerValue,
-                            'MaterialName': material.Name if material.Name else "Unnamed Material",
-                            'MaterialClass': material.MaterialClass if hasattr(material, 'MaterialClass') else "Unknown",
+                            'MaterialId': layer['MaterialId'],
+                            'MaterialName': layer['MaterialName'],
+                            'MaterialClass': material_class,
                             # Thickness and quantities - PROPERLY FORMATTED
                             'Thickness_mm': format_number(thickness, 5),
                             'MaterialVolume_m3': format_number(material_volume, 5),
@@ -216,7 +328,21 @@ def get_comprehensive_material_data():
     
     return material_usage_data
 
-# [Keep all the other functions unchanged - get_family_name, get_family_type, etc.]
+def calculate_layer_volume(element, thickness_mm):
+    """Calculate volume for a specific layer thickness"""
+    try:
+        if hasattr(element, 'WallType') or hasattr(element, 'FloorType'):
+            area_param = element.LookupParameter("Area")
+            if area_param and area_param.HasValue and thickness_mm != "N/A":
+                area_sqft = area_param.AsDouble()
+                thickness_ft = UnitUtils.ConvertToInternalUnits(float(thickness_mm), UnitTypeId.Millimeters)
+                volume_cuft = area_sqft * thickness_ft
+                volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
+                return round(volume_cum, 5)
+        return "N/A"
+    except:
+        return "N/A"
+
 
 def get_family_name(element):
     """Get family name from element"""
@@ -465,18 +591,15 @@ def save_to_csv(material_data):
         save_dialog.FileName = "ESG_Material_Export_{}".format(timestamp)
         if save_dialog.ShowDialog() == DialogResult.OK:
             file_path = save_dialog.FileName
-            
             # Show progress for CSV writing
             output.print_md("## Writing CSV File...")
             print("Writing {} material records to CSV...".format(len(material_data)))
-            
             with open(file_path, 'wb') as csvfile:
                 if material_data:
                     fieldnames = material_data[0].keys()
                     writer = csv.DictWriter(csvfile, fieldnames=fieldnames,
                                           delimiter=';', lineterminator='\n')
                     writer.writeheader()
-                    
                     # Write data with progress updates
                     for i, material in enumerate(material_data):
                         if i % 500 == 0:  # Update every 500 records
@@ -487,13 +610,12 @@ def save_to_csv(material_data):
                     writer = csv.writer(csvfile, delimiter=';', lineterminator='\n')
                     headers = [
                         'ElementId', 'ElementCategory', 'ExportGUID', 'FamilyName', 'FamilyType', 'Type', 'TypeId',
-                        'Width_mm', 'Height_mm',
+                        'Width_mm', 'Height_mm', 'LayerIndex',
                         'MaterialId', 'MaterialName', 'MaterialClass',
                         'Thickness_mm', 'MaterialVolume_m3', 'MaterialArea_m2',
                         'ElementTotalVolume_m3', 'ElementTotalArea_m2'
-                    ]
+                    ]  # FIXED: Added missing closing bracket
                     writer.writerow(headers)
-            
             output.print_md("## CSV Export Complete!")
             return file_path, len(material_data)
         else:
@@ -513,15 +635,12 @@ def main():
         if result == DialogResult.Yes:
             # Start timer
             start_time = time.time()
-            
             # Clear output window and show progress
             output.close_others()
             output.print_md("# ESG Material Data Export")
             output.print_md("**Started:** {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-            
             # Use the new comprehensive function with progress
             material_data = get_comprehensive_material_data()
-            
             if not material_data:
                 MessageBox.Show(
                     "No materials found in the current model.",
@@ -530,92 +649,15 @@ def main():
                     MessageBoxIcon.Warning
                 )
                 return
-            
             file_path, count = save_to_csv(material_data)
-            
             # Calculate elapsed time
             end_time = time.time()
             elapsed_time = round(end_time - start_time, 2)
-            
             if file_path:
                 output.print_md("## Export Results")
                 output.print_md("**File:** {}".format(file_path))
                 output.print_md("**Records:** {}".format(count))
                 output.print_md("**Time:** {} seconds".format(elapsed_time))
-                
-                MessageBox.Show(
-                    "Export completed successfully!\n\n" +
-                    "Material records exported: {}\n".format(count) +
-                    "Processing time: {} seconds\n".format(elapsed_time) +
-                    "File saved to:\n{}".format(file_path),
-                    "Export Success",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information
-                )
-            else:
-                MessageBox.Show(
-                    "Export cancelled - no file was saved.",
-                    "Export Cancelled",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information
-                )
-        else:
-            MessageBox.Show(
-                "Export cancelled by user.",
-                "Export Cancelled",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information
-            )
-    except Exception as e:
-        MessageBox.Show(
-            "An error occurred during export:\n\n{}".format(str(e)),
-            "Export Error",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Error
-        )
-
-def main():
-    """Main function that runs when the button is clicked"""
-    try:
-        result = MessageBox.Show(
-            "This will generate a comprehensive material list export for ESG/CO2 analysis.\n\nDo you want to proceed?",
-            "Export ESG Material Data",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Question
-        )
-        if result == DialogResult.Yes:
-            # Start timer
-            start_time = time.time()
-            
-            # Clear output window and show progress
-            output.close_others()
-            output.print_md("# ESG Material Data Export")
-            output.print_md("**Started:** {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-            
-            # Use the new comprehensive function with progress
-            material_data = get_comprehensive_material_data()
-            
-            if not material_data:
-                MessageBox.Show(
-                    "No materials found in the current model.",
-                    "No Data",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
-                )
-                return
-            
-            file_path, count = save_to_csv(material_data)
-            
-            # Calculate elapsed time
-            end_time = time.time()
-            elapsed_time = round(end_time - start_time, 2)
-            
-            if file_path:
-                output.print_md("## Export Results")
-                output.print_md("**File:** {}".format(file_path))
-                output.print_md("**Records:** {}".format(count))
-                output.print_md("**Time:** {} seconds".format(elapsed_time))
-                
                 MessageBox.Show(
                     "Export completed successfully!\n\n" +
                     "Material records exported: {}\n".format(count) +
