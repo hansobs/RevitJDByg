@@ -5,8 +5,7 @@ This script exports comprehensive material data from Revit to CSV format.
 __title__ = "Export ESG Data"
 __author__ = "Jens Damm & Hans Bohn Svendsen"
 
-from pyrevit import forms
-from pyrevit.revit import HOST_APP
+# Remove the conflicting pyrevit.forms import
 from pyrevit.output import get_output
 import clr
 import csv
@@ -17,13 +16,18 @@ from datetime import datetime
 clr.AddReference('System.Windows.Forms')
 clr.AddReference('System')
 
-from System.Windows.Forms import MessageBox, MessageBoxButtons, MessageBoxIcon, DialogResult, SaveFileDialog
+# Import only what you need from Windows Forms
+from System.Windows.Forms import (
+    MessageBox, MessageBoxButtons, MessageBoxIcon, DialogResult, 
+    SaveFileDialog, FolderBrowserDialog
+)
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
 
 # Global variables
 doc = __revit__.ActiveUIDocument.Document
 output = get_output()
+
 
 # Configuration constants
 class Config:
@@ -538,24 +542,37 @@ class MaterialDataExtractor:
 def save_to_csv(material_data):
     """Save comprehensive material data to CSV file with semicolon delimiter"""
     try:
+        # Create and configure the SaveFileDialog properly
         save_dialog = SaveFileDialog()
         save_dialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
         save_dialog.FilterIndex = 1
         save_dialog.RestoreDirectory = True
-        save_dialog.InitialDirectory = os.path.expanduser("~\\Documents")
+        
+        # Use a more reliable path method
+        try:
+            initial_dir = os.path.join(os.path.expanduser("~"), "Documents")
+            if os.path.exists(initial_dir):
+                save_dialog.InitialDirectory = initial_dir
+        except:
+            pass  # Fall back to default directory
+            
         save_dialog.FileName = "ESG_Material_Export_{}".format(Config.get_timestamp())
         
-        if save_dialog.ShowDialog() == DialogResult.OK:
+        # Show dialog and handle result
+        dialog_result = save_dialog.ShowDialog()
+        
+        if dialog_result == DialogResult.OK:
             file_path = save_dialog.FileName
-            
             output.print_md("## Writing CSV File...")
             print("Writing {} material records to CSV...".format(len(material_data)))
             
+            # Use binary mode for Python 2.7 compatibility
             with open(file_path, 'wb') as csvfile:
                 if material_data:
                     fieldnames = material_data[0].keys()
                     writer = csv.DictWriter(csvfile, fieldnames=fieldnames,
-                                          delimiter=Config.CSV_DELIMITER, lineterminator='\n')
+                                          delimiter=Config.CSV_DELIMITER, 
+                                          lineterminator='\n')
                     writer.writeheader()
                     
                     for i, material in enumerate(material_data):
@@ -564,7 +581,8 @@ def save_to_csv(material_data):
                             print("Writing record {} of {} ({}%)".format(i + 1, len(material_data), progress_percent))
                         writer.writerow(material)
                 else:
-                    writer = csv.writer(csvfile, delimiter=Config.CSV_DELIMITER, lineterminator='\n')
+                    writer = csv.writer(csvfile, delimiter=Config.CSV_DELIMITER, 
+                                      lineterminator='\n')
                     headers = [
                         'ElementId', 'ElementCategory', 'ExportGUID', 'FamilyName', 'FamilyType', 'Type', 'TypeId',
                         'Width_mm', 'Height_mm', 'LayerIndex',
@@ -578,12 +596,15 @@ def save_to_csv(material_data):
             return file_path, len(material_data)
         else:
             return None, 0
+            
     except Exception as e:
         raise Exception("Error saving CSV file: {}".format(str(e)))
+
 
 def main():
     """Main function that runs when the button is clicked"""
     try:
+        # Show confirmation dialog
         result = MessageBox.Show(
             "This will generate a comprehensive material list export for ESG/CO2 analysis.\n\nDo you want to proceed?",
             "Export ESG Material Data",
@@ -594,19 +615,27 @@ def main():
         if result == DialogResult.Yes:
             start_time = time.time()
             
+            # Clear output window
             output.close_others()
             output.print_md("# ESG Material Data Export")
             output.print_md("*Started:* {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
             
+            # Extract material data
             extractor = MaterialDataExtractor(doc, output)
             material_data = extractor.extract_all_materials()
             
             if not material_data:
-                MessageBox.Show("No materials found in the current model.", "No Data", 
-                              MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                MessageBox.Show(
+                    "No materials found in the current model.", 
+                    "No Data",
+                    MessageBoxButtons.OK, 
+                    MessageBoxIcon.Warning
+                )
                 return
             
+            # Save to CSV
             file_path, count = save_to_csv(material_data)
+            
             end_time = time.time()
             elapsed_time = round(end_time - start_time, 2)
             
@@ -621,18 +650,34 @@ def main():
                     "Material records exported: {}\n".format(count) +
                     "Processing time: {} seconds\n".format(elapsed_time) +
                     "File saved to:\n{}".format(file_path),
-                    "Export Success", MessageBoxButtons.OK, MessageBoxIcon.Information
+                    "Export Success", 
+                    MessageBoxButtons.OK, 
+                    MessageBoxIcon.Information
                 )
             else:
-                MessageBox.Show("Export cancelled - no file was saved.", "Export Cancelled", 
-                              MessageBoxButtons.OK, MessageBoxIcon.Information)
+                MessageBox.Show(
+                    "Export cancelled - no file was saved.", 
+                    "Export Cancelled",
+                    MessageBoxButtons.OK, 
+                    MessageBoxIcon.Information
+                )
         else:
-            MessageBox.Show("Export cancelled by user.", "Export Cancelled", 
-                          MessageBoxButtons.OK, MessageBoxIcon.Information)
-    
+            MessageBox.Show(
+                "Export cancelled by user.", 
+                "Export Cancelled",
+                MessageBoxButtons.OK, 
+                MessageBoxIcon.Information
+            )
+            
     except Exception as e:
-        MessageBox.Show("An error occurred during export:\n\n{}".format(str(e)),
-                       "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        error_msg = "An error occurred during export:\n\n{}".format(str(e))
+        print("ERROR: {}".format(error_msg))  # Also print to console for debugging
+        MessageBox.Show(
+            error_msg,
+            "Export Error", 
+            MessageBoxButtons.OK, 
+            MessageBoxIcon.Error
+        )
 
 if __name__ == '__main__':
     main()
