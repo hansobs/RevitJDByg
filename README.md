@@ -1,11 +1,7 @@
 ## to do next time/what to test:
-- **download new version
-- **save it in the extension folder
-- **reload pyrevit
-- **on projekt1 press the new updated extension to export csv
+- debug stairs, continue work - we are currently fixing data export for risers and treads in different materials
 
-- **it should by default suggest the c drive as the saving location instead of the location of the extension
-- **when choosing a location, the csv export should work - last test threw an error during the csv export.
+- refactor code into more manageable segments
 
 ## Future ideas:
 
