@@ -900,15 +900,18 @@ class MaterialDataExtractor:
             # Track stair elements and debug the first few
             if is_stair_element(element):
                 self.debug_info['stair_elements'] += 1
+                print("FOUND STAIR ELEMENT: ID {} (Stair #{})".format(element.Id.IntegerValue, self.debug_info['stair_elements']))  # Add this line
+                
                 # Enhanced debug for first 3 stair elements to find width parameters
                 if self.debug_info['stair_elements'] <= 3:
+                    print("STARTING DEBUG for stair element {}".format(element.Id.IntegerValue))  # Add this line
                     debug_stair_parameters(element)
                     debug_stair_width_parameters(element)
                     debug_stair_builtin_parameters(element)
-                    debug_stair_run_parameters(element)  # Add this line
+                    debug_stair_run_parameters(element)
+                    print("FINISHED DEBUG for stair element {}".format(element.Id.IntegerValue))  # Add this line
             
-            element_info = self._get_element_info(element)
-            # Track elements with area/volume for debugging
+            element_info = self._get_element_info(element)            # Track elements with area/volume for debugging
             if element_info['area'] != "N/A":
                 self.debug_info['elements_with_area'] += 1
             if element_info['volume'] != "N/A":
