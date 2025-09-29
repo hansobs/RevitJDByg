@@ -223,10 +223,10 @@ def get_stair_parameters(element):
         ["Actual Tread Depth", "Minimum Tread Depth", "Desired Tread Depth", "Tread Depth"]
     )
     
-    # Actual Run Width
+    # Actual Run Width - using the specific BuiltInParameter from the Danish code
     stair_params['StairWidth_mm'] = get_parameter_value_comprehensive(
         element,
-        ["STAIRS_ATTR_ACTUAL_RUN_WIDTH", "STAIRS_ATTR_RUN_WIDTH", "GENERIC_WIDTH", "FAMILY_WIDTH_PARAM"],
+        ["STAIRS_ACTUAL_RUN_WIDTH", "STAIRS_ATTR_ACTUAL_RUN_WIDTH", "STAIRS_ATTR_RUN_WIDTH"],
         get_unit_type_millimeters(),
         ["Actual Run Width", "Run Width", "Minimum Run Width", "Width", "Stair Width", "Clear Width"]
     )
@@ -687,6 +687,45 @@ def calculate_material_area(element, material_id):
         return area_str if area_str != "N/A" else "N/A"
     except:
         return "N/A"
+def debug_stair_builtin_parameters(element):
+    """Debug function to test specific BuiltInParameters on stairs"""
+    if not is_stair_element(element):
+        return
+    
+    print("=== BUILTIN PARAMETER DEBUG: Stair Element {} ===".format(element.Id.IntegerValue))
+    
+    # Test specific stair BuiltInParameters
+    builtin_params_to_test = [
+        ("STAIRS_ACTUAL_RUN_WIDTH", "Actual Run Width"),
+        ("STAIRS_ATTR_ACTUAL_RUN_WIDTH", "Attr Actual Run Width"),
+        ("STAIRS_ATTR_RUN_WIDTH", "Attr Run Width"),
+        ("STAIRS_ACTUAL_NUM_RISERS", "Actual Num Risers"),
+        ("STAIRS_ACTUAL_RISER_HEIGHT", "Actual Riser Height"),
+        ("STAIRS_ACTUAL_TREAD_DEPTH", "Actual Tread Depth")
+    ]
+    
+    for param_name, description in builtin_params_to_test:
+        try:
+            builtin_param = getattr(BuiltInParameter, param_name)
+            param = element.get_Parameter(builtin_param)
+            if param and param.HasValue:
+                if param.StorageType == StorageType.Double:
+                    value = param.AsDouble()
+                    mm_value = convert_from_internal_units(value, get_unit_type_millimeters())
+                    print("  {} ({}) = {} mm".format(description, param_name, mm_value))
+                elif param.StorageType == StorageType.Integer:
+                    print("  {} ({}) = {}".format(description, param_name, param.AsInteger()))
+                else:
+                    print("  {} ({}) = {}".format(description, param_name, param.AsValueString()))
+            else:
+                print("  {} ({}) = [No value or parameter not found]".format(description, param_name))
+        except AttributeError:
+            print("  {} ({}) = [BuiltInParameter not available in this Revit version]".format(description, param_name))
+        except Exception as e:
+            print("  {} ({}) = [Error: {}]".format(description, param_name, str(e)))
+    
+    print("=== END BUILTIN PARAMETER DEBUG ===")
+
 
 def debug_stair_width_parameters(element):
     """Enhanced debug function to find width-related parameters on stairs"""
@@ -736,6 +775,7 @@ def debug_stair_width_parameters(element):
     print("=== END ENHANCED DEBUG ===")
     return width_related_params
 
+
 class MaterialDataExtractor:
     """Class to handle material data extraction with progress tracking"""
     def __init__(self, document, output_window):
@@ -770,8 +810,10 @@ class MaterialDataExtractor:
                 if self.debug_info['stair_elements'] <= 3:
                     debug_stair_parameters(element)
                     debug_stair_width_parameters(element)
+                    debug_stair_builtin_parameters(element)  # Add this line
             
             element_info = self._get_element_info(element)
+
             # Track elements with area/volume for debugging
             if element_info['area'] != "N/A":
                 self.debug_info['elements_with_area'] += 1
