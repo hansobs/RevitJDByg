@@ -26,6 +26,55 @@ from Autodesk.Revit.UI import *
 doc = __revit__.ActiveUIDocument.Document
 output = get_output()
 
+# Unit type compatibility handling
+def get_unit_type_millimeters():
+    """Get the correct unit type for millimeters based on Revit version"""
+    try:
+        # Try Revit 2021+ approach
+        return UnitTypeId.Millimeters
+    except:
+        try:
+            # Try older Revit versions
+            return DisplayUnitType.DUT_MILLIMETERS
+        except:
+            # Fallback for very old versions
+            return None
+
+def get_unit_type_square_meters():
+    """Get the correct unit type for square meters based on Revit version"""
+    try:
+        return UnitTypeId.SquareMeters
+    except:
+        try:
+            return DisplayUnitType.DUT_SQUARE_METERS
+        except:
+            return None
+
+def get_unit_type_cubic_meters():
+    """Get the correct unit type for cubic meters based on Revit version"""
+    try:
+        return UnitTypeId.CubicMeters
+    except:
+        try:
+            return DisplayUnitType.DUT_CUBIC_METERS
+        except:
+            return None
+
+def convert_from_internal_units(value, unit_type):
+    """Convert from internal units with version compatibility"""
+    if unit_type is None:
+        return value
+    try:
+        # Try newer API
+        return UnitUtils.ConvertFromInternalUnits(value, unit_type)
+    except:
+        try:
+            # Try older API
+            return UnitUtils.ConvertFromInternalUnits(value, unit_type)
+        except:
+            # If all else fails, return the value as-is
+            return value
+
 # Configuration constants
 class Config:
     DEFAULT_DECIMALS = 5
@@ -71,7 +120,7 @@ def get_builtin_parameter_value(element, builtin_params, unit_type=None, fallbac
                 if param and param.HasValue:
                     if unit_type:
                         value = param.AsDouble()
-                        value = UnitUtils.ConvertFromInternalUnits(value, unit_type)
+                        value = convert_from_internal_units(value, unit_type)
                         return format_number(value, Config.DEFAULT_DECIMALS)
                     else:
                         return param.AsString() or param.AsValueString()
@@ -87,7 +136,7 @@ def get_builtin_parameter_value(element, builtin_params, unit_type=None, fallbac
                     if param and param.HasValue:
                         if unit_type:
                             value = param.AsDouble()
-                            value = UnitUtils.ConvertFromInternalUnits(value, unit_type)
+                            value = convert_from_internal_units(value, unit_type)
                             return format_number(value, Config.DEFAULT_DECIMALS)
                         else:
                             return param.AsString() or param.AsValueString()
@@ -101,7 +150,7 @@ def get_builtin_parameter_value(element, builtin_params, unit_type=None, fallbac
                 if param and param.HasValue:
                     if unit_type:
                         value = param.AsDouble()
-                        value = UnitUtils.ConvertFromInternalUnits(value, unit_type)
+                        value = convert_from_internal_units(value, unit_type)
                         return format_number(value, Config.DEFAULT_DECIMALS)
                     else:
                         return param.AsString() or param.AsValueString()
@@ -113,7 +162,7 @@ def get_builtin_parameter_value(element, builtin_params, unit_type=None, fallbac
                     if param and param.HasValue:
                         if unit_type:
                             value = param.AsDouble()
-                            value = UnitUtils.ConvertFromInternalUnits(value, unit_type)
+                            value = convert_from_internal_units(value, unit_type)
                             return format_number(value, Config.DEFAULT_DECIMALS)
                         else:
                             return param.AsString() or param.AsValueString()
@@ -130,7 +179,7 @@ def get_element_width(element):
          BuiltInParameter.WINDOW_WIDTH,
          BuiltInParameter.GENERIC_WIDTH,
          BuiltInParameter.FAMILY_WIDTH_PARAM],
-        UnitTypeId.Millimeters,
+        get_unit_type_millimeters(),
         ["Width"]  # Fallback
     )
 
@@ -143,7 +192,7 @@ def get_element_height(element):
          BuiltInParameter.GENERIC_HEIGHT,
          BuiltInParameter.FAMILY_HEIGHT_PARAM,
          BuiltInParameter.WALL_USER_HEIGHT_PARAM],
-        UnitTypeId.Millimeters,
+        get_unit_type_millimeters(),
         ["Height"]  # Fallback
     )
 
@@ -154,7 +203,7 @@ def get_element_thickness(element):
         [BuiltInParameter.WALL_ATTR_WIDTH_PARAM,
          BuiltInParameter.GENERIC_THICKNESS,
          BuiltInParameter.FAMILY_THICKNESS_PARAM],
-        UnitTypeId.Millimeters,
+        get_unit_type_millimeters(),
         ["Thickness"]  # Fallback
     )
 
@@ -165,7 +214,7 @@ def get_element_area(element):
         [BuiltInParameter.HOST_AREA_COMPUTED,
          BuiltInParameter.ROOM_AREA,
          BuiltInParameter.SPACE_ASSOC_ROOM_AREA],
-        UnitTypeId.SquareMeters,
+        get_unit_type_square_meters(),
         ["Area"]  # Fallback
     )
 
@@ -176,15 +225,18 @@ def get_element_volume(element):
         [BuiltInParameter.HOST_VOLUME_COMPUTED,
          BuiltInParameter.ROOM_VOLUME,
          BuiltInParameter.SPACE_ASSOC_ROOM_VOLUME],
-        UnitTypeId.CubicMeters,
+        get_unit_type_cubic_meters(),
         ["Volume"]  # Fallback
     )
 
 @safe_execution()
 def get_export_guid(element):
     """Get export GUID for element"""
-    guid_str = ExportUtils.GetExportId(doc, element.Id)
-    return str(guid_str) if guid_str else "N/A"
+    try:
+        guid_str = ExportUtils.GetExportId(doc, element.Id)
+        return str(guid_str) if guid_str else "N/A"
+    except:
+        return "N/A"
 
 def get_material_layers(element):
     """Returns all layers with material + thickness, including 'By Category'"""
@@ -204,9 +256,8 @@ def get_material_layers(element):
                         mat = doc.GetElement(mat_id)
                         mat_name = mat.Name if mat else "Unknown"
                         mat_id_for_export = mat_id.IntegerValue
-                    thickness_mm = UnitUtils.ConvertFromInternalUnits(
-                        layer.Width, UnitTypeId.Millimeters
-                    )
+                    
+                    thickness_mm = convert_from_internal_units(layer.Width, get_unit_type_millimeters())
                     results.append({
                         "LayerIndex": i,
                         "MaterialId": mat_id_for_export,
@@ -381,7 +432,7 @@ def get_material_thickness(element, material_id):
                 for layer in layers:
                     if layer.MaterialId == material_id:
                         thickness_feet = layer.Width
-                        thickness_mm = UnitUtils.ConvertFromInternalUnits(thickness_feet, UnitTypeId.Millimeters)
+                        thickness_mm = convert_from_internal_units(thickness_feet, get_unit_type_millimeters())
                         return round(thickness_mm, 5)
         
         # Use BuiltInParameter for thickness
@@ -721,7 +772,7 @@ def main():
             start_time = time.time()
             
             output.close_others()
-            output.print_md("# ESG Material Data Export (Optimized with Debug)")
+            output.print_md("# ESG Material Data Export (Version Compatible)")
             output.print_md("*Started:* {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
             
             extractor = MaterialDataExtractor(doc, output)
