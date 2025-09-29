@@ -129,11 +129,21 @@ def get_category_material_info(element):
     except:
         return None
 
+
 def is_stair_element(element):
-    """Check if element is a stair"""
+    """Check if element is a stair with enhanced debugging"""
     try:
-        return element.Category and element.Category.Name == "Stairs"
-    except:
+        if element.Category:
+            category_name = element.Category.Name
+            if category_name == "Stairs":
+                print("is_stair_element: Found stair with category '{}'".format(category_name))
+                return True
+            elif "stair" in category_name.lower():
+                print("is_stair_element: Found element with stair-like category '{}'".format(category_name))
+                return True
+        return False
+    except Exception as e:
+        print("is_stair_element: Error checking element {}: {}".format(element.Id.IntegerValue, str(e)))
         return False
 
 def debug_stair_parameters(element):
@@ -895,23 +905,39 @@ class MaterialDataExtractor:
         try:
             if not element.Category:
                 return []
+            
             self.debug_info['elements_with_category'] += 1
+            
+            # Add basic category debugging
+            if element.Category.Name in ["Stairs", "Stair"]:
+                print("FOUND ELEMENT WITH STAIRS CATEGORY: ID {}, Category: '{}'".format(
+                    element.Id.IntegerValue, element.Category.Name))
             
             # Track stair elements and debug the first few
             if is_stair_element(element):
                 self.debug_info['stair_elements'] += 1
-                print("FOUND STAIR ELEMENT: ID {} (Stair #{})".format(element.Id.IntegerValue, self.debug_info['stair_elements']))  # Add this line
+                print("FOUND STAIR ELEMENT: ID {} (Stair #{})".format(element.Id.IntegerValue, self.debug_info['stair_elements']))
                 
                 # Enhanced debug for first 3 stair elements to find width parameters
                 if self.debug_info['stair_elements'] <= 3:
-                    print("STARTING DEBUG for stair element {}".format(element.Id.IntegerValue))  # Add this line
+                    print("STARTING DEBUG for stair element {}".format(element.Id.IntegerValue))
                     debug_stair_parameters(element)
                     debug_stair_width_parameters(element)
                     debug_stair_builtin_parameters(element)
                     debug_stair_run_parameters(element)
-                    print("FINISHED DEBUG for stair element {}".format(element.Id.IntegerValue))  # Add this line
+                    print("FINISHED DEBUG for stair element {}".format(element.Id.IntegerValue))
+            else:
+                # Debug what categories we're actually seeing
+                if hasattr(element, 'Category') and element.Category:
+                    category_name = element.Category.Name
+                    if category_name not in ["Views", "Sheets", "Levels", "Grids"]:  # Skip common non-physical elements
+                        if self.debug_info['elements_with_category'] <= 10:  # Only show first 10
+                            print("Non-stair element: ID {}, Category: '{}'".format(
+                                element.Id.IntegerValue, category_name))
             
-            element_info = self._get_element_info(element)            # Track elements with area/volume for debugging
+            element_info = self._get_element_info(element)
+            
+            # Track elements with area/volume for debugging
             if element_info['area'] != "N/A":
                 self.debug_info['elements_with_area'] += 1
             if element_info['volume'] != "N/A":
