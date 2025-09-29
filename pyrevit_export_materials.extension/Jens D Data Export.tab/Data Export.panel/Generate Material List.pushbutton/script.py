@@ -113,6 +113,22 @@ def format_number(value, decimals=Config.DEFAULT_DECIMALS):
     except:
         return "N/A"
 
+def get_category_material_info(element):
+    """Get material information from element's category"""
+    try:
+        if element.Category:
+            category = element.Category
+            material = category.Material
+            if material:
+                return {
+                    'material_id': material.Id.IntegerValue,
+                    'material_name': material.Name,
+                    'material_class': getattr(material, 'MaterialClass', 'Unknown')
+                }
+        return None
+    except:
+        return None
+
 def get_parameter_value_comprehensive(element, builtin_param_names, unit_type=None, fallback_param_names=None):
     """Comprehensive parameter value retrieval with multiple fallback methods"""
     try:
@@ -300,7 +316,7 @@ def get_export_guid(element):
         return "N/A"
 
 def get_material_layers(element):
-    """Returns all layers with material + thickness, including 'By Category'"""
+    """Returns all layers with material + thickness, including enhanced 'By Category' handling"""
     results = []
     try:
         element_type = doc.GetElement(element.GetTypeId())
@@ -311,11 +327,17 @@ def get_material_layers(element):
                 for i, layer in enumerate(layers):
                     mat_id = layer.MaterialId
                     if mat_id == ElementId.InvalidElementId:
-                        mat_name = "By Category ({})".format(element.Category.Name)
-                        mat_id_for_export = "By_Category"
+                        # Enhanced "By Category" handling
+                        category_material = get_category_material_info(element)
+                        if category_material:
+                            mat_name = "By Category: {}".format(category_material['material_name'])
+                            mat_id_for_export = "ByCategory_{}".format(category_material['material_id'])
+                        else:
+                            mat_name = "By Category: {}".format(element.Category.Name)
+                            mat_id_for_export = "ByCategory_Unknown"
                     else:
                         mat = doc.GetElement(mat_id)
-                        mat_name = mat.Name if mat else "Unknown"
+                        mat_name = mat.Name if mat else "Unknown Material"
                         mat_id_for_export = mat_id.IntegerValue
                     
                     thickness_mm = convert_from_internal_units(layer.Width, get_unit_type_millimeters())
@@ -339,8 +361,8 @@ def get_material_layers(element):
         results.append({
             "LayerIndex": -1,
             "MaterialId": "Error",
-            "MaterialName": "Error",
-            "Thickness_mm": str(e)
+            "MaterialName": "Error: {}".format(str(e)),
+            "Thickness_mm": "N/A"
         })
     return results
 
@@ -563,7 +585,8 @@ class MaterialDataExtractor:
             'elements_processed': 0,
             'errors': 0,
             'elements_with_area': 0,
-            'elements_with_volume': 0
+            'elements_with_volume': 0,
+            'by_category_materials': 0
         }
 
     def extract_all_materials(self):
@@ -649,8 +672,8 @@ class MaterialDataExtractor:
                     'Width_mm': element_info['width'],
                     'Height_mm': element_info['height'],
                     'LayerIndex': 0,
-                    'MaterialId': "No Material",
-                    'MaterialName': "No Material",
+                    'MaterialId': "No_Material",
+                    'MaterialName': "No Material Assigned",
                     'MaterialClass': "Unknown",
                     'Thickness_mm': get_element_thickness(element),
                     'MaterialVolume_m3': "N/A",
@@ -685,6 +708,11 @@ class MaterialDataExtractor:
         for layer in material_layers:
             material_record = self._create_material_record(element, element_info, layer)
             material_records.append(material_record)
+            
+            # Track by category materials
+            if str(layer.get('MaterialId', '')).startswith('ByCategory'):
+                self.debug_info['by_category_materials'] += 1
+                
         return material_records
 
     def _process_element_fallback(self, element, element_info):
@@ -735,12 +763,19 @@ class MaterialDataExtractor:
         }
 
     def _get_material_class(self, layer_info):
-        """Get material class from layer info"""
+        """Get material class from layer info with enhanced By Category handling"""
         material_id = layer_info.get('MaterialId')
-        if material_id == "By_Category":
-            return "By Category"
+        material_name = layer_info.get('MaterialName', '')
+        
+        if str(material_id).startswith('ByCategory'):
+            if 'By Category:' in material_name:
+                return "By Category (Resolved)"
+            else:
+                return "By Category (Unresolved)"
         elif material_id == "N/A" or material_id == "Error":
             return "Unknown"
+        elif material_id == "No_Material":
+            return "No Material"
         else:
             try:
                 material = self.doc.GetElement(ElementId(int(material_id)))
@@ -770,6 +805,7 @@ class MaterialDataExtractor:
         self.output.print_md("*Elements with layers:* {}".format(self.debug_info['elements_with_layers']))
         self.output.print_md("*Elements with area:* {}".format(self.debug_info['elements_with_area']))
         self.output.print_md("*Elements with volume:* {}".format(self.debug_info['elements_with_volume']))
+        self.output.print_md("*By Category materials:* {}".format(self.debug_info['by_category_materials']))
         self.output.print_md("*Processing errors:* {}".format(self.debug_info['errors']))
 
 def save_to_csv(material_data):
@@ -844,7 +880,7 @@ def main():
             start_time = time.time()
             
             output.close_others()
-            output.print_md("# ESG Material Data Export (Robust Parameter Detection)")
+            output.print_md("# ESG Material Data Export (Enhanced By Category Handling)")
             output.print_md("*Started:* {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
             
             extractor = MaterialDataExtractor(doc, output)
