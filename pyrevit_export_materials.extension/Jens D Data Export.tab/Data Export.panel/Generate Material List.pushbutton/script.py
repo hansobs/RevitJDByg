@@ -16,7 +16,7 @@ clr.AddReference('System.Windows.Forms')
 clr.AddReference('System')
 
 from System.Windows.Forms import (
-    MessageBox, MessageBoxButtons, MessageBoxIcon, DialogResult, 
+    MessageBox, MessageBoxButtons, MessageBoxIcon, DialogResult,
     SaveFileDialog
 )
 from Autodesk.Revit.DB import *
@@ -129,6 +129,62 @@ def get_category_material_info(element):
     except:
         return None
 
+def is_stair_element(element):
+    """Check if element is a stair"""
+    try:
+        return element.Category and element.Category.Name == "Stairs"
+    except:
+        return False
+
+def get_stair_parameters(element):
+    """Get stair-specific parameters"""
+    if not is_stair_element(element):
+        return {}
+    
+    stair_params = {}
+    
+    # Number of Risers
+    stair_params['NumberOfRisers'] = get_parameter_value_comprehensive(
+        element,
+        ["STAIRS_ATTR_TOTAL_RUN_RISERS"],
+        None,
+        ["Number of Risers", "Total Risers"]
+    )
+    
+    # Riser Height
+    stair_params['RiserHeight_mm'] = get_parameter_value_comprehensive(
+        element,
+        ["STAIRS_ATTR_RISER_HEIGHT_PARAM"],
+        get_unit_type_millimeters(),
+        ["Riser Height", "Actual Riser Height"]
+    )
+    
+    # Tread Depth
+    stair_params['TreadDepth_mm'] = get_parameter_value_comprehensive(
+        element,
+        ["STAIRS_ATTR_TREAD_DEPTH_PARAM"],
+        get_unit_type_millimeters(),
+        ["Tread Depth", "Actual Tread Depth"]
+    )
+    
+    # Stair Width
+    stair_params['StairWidth_mm'] = get_parameter_value_comprehensive(
+        element,
+        ["STAIRS_ATTR_ACTUAL_RUN_WIDTH"],
+        get_unit_type_millimeters(),
+        ["Actual Run Width", "Width"]
+    )
+    
+    # Total Height
+    stair_params['TotalHeight_mm'] = get_parameter_value_comprehensive(
+        element,
+        ["STAIRS_ATTR_TOTAL_HEIGHT"],
+        get_unit_type_millimeters(),
+        ["Total Height", "Height"]
+    )
+    
+    return stair_params
+  
 def get_parameter_value_comprehensive(element, builtin_param_names, unit_type=None, fallback_param_names=None):
     """Comprehensive parameter value retrieval with multiple fallback methods"""
     try:
@@ -143,6 +199,9 @@ def get_parameter_value_comprehensive(element, builtin_param_names, unit_type=No
                         value = convert_from_internal_units(value, unit_type)
                         return format_number(value, Config.DEFAULT_DECIMALS)
                     else:
+                        # Handle integer parameters for stairs
+                        if param.StorageType == StorageType.Integer:
+                            return str(param.AsInteger())
                         return param.AsString() or param.AsValueString()
             except:
                 continue
@@ -159,6 +218,8 @@ def get_parameter_value_comprehensive(element, builtin_param_names, unit_type=No
                             value = convert_from_internal_units(value, unit_type)
                             return format_number(value, Config.DEFAULT_DECIMALS)
                         else:
+                            if param.StorageType == StorageType.Integer:
+                                return str(param.AsInteger())
                             return param.AsString() or param.AsValueString()
                 except:
                     continue
@@ -174,6 +235,8 @@ def get_parameter_value_comprehensive(element, builtin_param_names, unit_type=No
                             value = convert_from_internal_units(value, unit_type)
                             return format_number(value, Config.DEFAULT_DECIMALS)
                         else:
+                            if param.StorageType == StorageType.Integer:
+                                return str(param.AsInteger())
                             return param.AsString() or param.AsValueString()
                 except:
                     continue
@@ -189,6 +252,8 @@ def get_parameter_value_comprehensive(element, builtin_param_names, unit_type=No
                                 value = convert_from_internal_units(value, unit_type)
                                 return format_number(value, Config.DEFAULT_DECIMALS)
                             else:
+                                if param.StorageType == StorageType.Integer:
+                                    return str(param.AsInteger())
                                 return param.AsString() or param.AsValueString()
                     except:
                         continue
@@ -198,8 +263,19 @@ def get_parameter_value_comprehensive(element, builtin_param_names, unit_type=No
         return "N/A"
 
 def get_element_area_robust(element):
-    """Get area with multiple fallback methods"""
+    """Get area with multiple fallback methods, including stair-specific handling"""
     try:
+        # For stairs, prioritize HOST_AREA_COMPUTED
+        if is_stair_element(element):
+            area_result = get_parameter_value_comprehensive(
+                element,
+                ["HOST_AREA_COMPUTED"],
+                get_unit_type_square_meters(),
+                ["Area"]
+            )
+            if area_result != "N/A":
+                return area_result
+        
         # Method 1: Try comprehensive parameter search
         area_result = get_parameter_value_comprehensive(
             element,
@@ -240,8 +316,19 @@ def get_element_area_robust(element):
         return "N/A"
 
 def get_element_volume_robust(element):
-    """Get volume with multiple fallback methods"""
+    """Get volume with multiple fallback methods, including stair-specific handling"""
     try:
+        # For stairs, prioritize HOST_VOLUME_COMPUTED
+        if is_stair_element(element):
+            volume_result = get_parameter_value_comprehensive(
+                element,
+                ["HOST_VOLUME_COMPUTED"],
+                get_unit_type_cubic_meters(),
+                ["Volume"]
+            )
+            if volume_result != "N/A":
+                return volume_result
+        
         # Method 1: Try comprehensive parameter search
         volume_result = get_parameter_value_comprehensive(
             element,
@@ -586,7 +673,8 @@ class MaterialDataExtractor:
             'errors': 0,
             'elements_with_area': 0,
             'elements_with_volume': 0,
-            'by_category_materials': 0
+            'by_category_materials': 0,
+            'stair_elements': 0
         }
 
     def extract_all_materials(self):
@@ -625,8 +713,11 @@ class MaterialDataExtractor:
             
             self.debug_info['elements_with_category'] += 1
             
-            element_info = self._get_element_info(element)
+            # Track stair elements
+            if is_stair_element(element):
+                self.debug_info['stair_elements'] += 1
             
+            element_info = self._get_element_info(element)
             # Track elements with area/volume for debugging
             if element_info['area'] != "N/A":
                 self.debug_info['elements_with_area'] += 1
@@ -656,8 +747,8 @@ class MaterialDataExtractor:
         try:
             # Only create records for certain categories that should have materials
             relevant_categories = [
-                "Walls", "Floors", "Roofs", "Ceilings", "Structural Framing", 
-                "Structural Columns", "Doors", "Windows", "Furniture", "Casework"
+                "Walls", "Floors", "Roofs", "Ceilings", "Structural Framing",
+                "Structural Columns", "Doors", "Windows", "Furniture", "Casework", "Stairs"
             ]
             
             if element.Category and element.Category.Name in relevant_categories:
@@ -681,6 +772,18 @@ class MaterialDataExtractor:
                     'ElementTotalVolume_m3': element_info['volume'],
                     'ElementTotalArea_m2': element_info['area']
                 }
+                
+                # Add stair-specific parameters if it's a stair
+                if is_stair_element(element):
+                    stair_params = element_info.get('stair_params', {})
+                    basic_record.update({
+                        'NumberOfRisers': stair_params.get('NumberOfRisers', 'N/A'),
+                        'RiserHeight_mm': stair_params.get('RiserHeight_mm', 'N/A'),
+                        'TreadDepth_mm': stair_params.get('TreadDepth_mm', 'N/A'),
+                        'StairWidth_mm': stair_params.get('StairWidth_mm', 'N/A'),
+                        'TotalHeight_mm': stair_params.get('TotalHeight_mm', 'N/A')
+                    })
+                
                 return [basic_record]
             return []
         except:
@@ -688,7 +791,7 @@ class MaterialDataExtractor:
 
     def _get_element_info(self, element):
         """Get common element information using robust parameter access"""
-        return {
+        element_info = {
             'element_id': element.Id.IntegerValue,
             'category': element.Category.Name if element.Category else "Unknown",
             'export_guid': get_export_guid(element),
@@ -701,7 +804,13 @@ class MaterialDataExtractor:
             'volume': get_element_volume_robust(element),
             'area': get_element_area_robust(element)
         }
-
+        
+        # Add stair-specific parameters if it's a stair
+        if is_stair_element(element):
+            element_info['stair_params'] = get_stair_parameters(element)
+        
+        return element_info
+  
     def _process_element_layers(self, element, element_info, material_layers):
         """Process element using material layers"""
         material_records = []
@@ -741,7 +850,7 @@ class MaterialDataExtractor:
         material_volume = calculate_layer_volume(element, thickness)
         material_area = calculate_material_area(element, None)
         
-        return {
+        record = {
             'ElementId': element_info['element_id'],
             'ElementCategory': element_info['category'],
             'ExportGUID': element_info['export_guid'],
@@ -761,7 +870,20 @@ class MaterialDataExtractor:
             'ElementTotalVolume_m3': format_number(element_info['volume']),
             'ElementTotalArea_m2': format_number(element_info['area'])
         }
-
+        
+        # Add stair-specific parameters if it's a stair
+        if is_stair_element(element):
+            stair_params = element_info.get('stair_params', {})
+            record.update({
+                'NumberOfRisers': stair_params.get('NumberOfRisers', 'N/A'),
+                'RiserHeight_mm': stair_params.get('RiserHeight_mm', 'N/A'),
+                'TreadDepth_mm': stair_params.get('TreadDepth_mm', 'N/A'),
+                'StairWidth_mm': stair_params.get('StairWidth_mm', 'N/A'),
+                'TotalHeight_mm': stair_params.get('TotalHeight_mm', 'N/A')
+            })
+        
+        return record
+  
     def _get_material_class(self, layer_info):
         """Get material class from layer info with enhanced By Category handling"""
         material_id = layer_info.get('MaterialId')
@@ -806,6 +928,7 @@ class MaterialDataExtractor:
         self.output.print_md("*Elements with area:* {}".format(self.debug_info['elements_with_area']))
         self.output.print_md("*Elements with volume:* {}".format(self.debug_info['elements_with_volume']))
         self.output.print_md("*By Category materials:* {}".format(self.debug_info['by_category_materials']))
+        self.output.print_md("*Stair elements:* {}".format(self.debug_info['stair_elements']))
         self.output.print_md("*Processing errors:* {}".format(self.debug_info['errors']))
 
 def save_to_csv(material_data):
@@ -854,7 +977,8 @@ def save_to_csv(material_data):
                         'Width_mm', 'Height_mm', 'LayerIndex',
                         'MaterialId', 'MaterialName', 'MaterialClass',
                         'Thickness_mm', 'MaterialVolume_m3', 'MaterialArea_m2',
-                        'ElementTotalVolume_m3', 'ElementTotalArea_m2'
+                        'ElementTotalVolume_m3', 'ElementTotalArea_m2',
+                        'NumberOfRisers', 'RiserHeight_mm', 'TreadDepth_mm', 'StairWidth_mm', 'TotalHeight_mm'
                     ]
                     writer.writerow(headers)
             
@@ -870,7 +994,7 @@ def main():
     """Main function that runs when the button is clicked"""
     try:
         result = MessageBox.Show(
-            "This will generate a comprehensive material list export for ESG/CO2 analysis.\n\nDo you want to proceed?",
+            "This will generate a comprehensive material list export for ESG/CO2 analysis with enhanced stair support.\n\nDo you want to proceed?",
             "Export ESG Material Data",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Question
@@ -880,7 +1004,7 @@ def main():
             start_time = time.time()
             
             output.close_others()
-            output.print_md("# ESG Material Data Export (Enhanced By Category Handling)")
+            output.print_md("# ESG Material Data Export (Enhanced with Stair Parameters)")
             output.print_md("*Started:* {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
             
             extractor = MaterialDataExtractor(doc, output)
