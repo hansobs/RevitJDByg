@@ -137,50 +137,50 @@ def is_stair_element(element):
         return False
 
 def get_stair_parameters(element):
-    """Get stair-specific parameters with enhanced detection"""
+    """Get stair-specific parameters with enhanced detection based on debug output"""
     if not is_stair_element(element):
         return {}
     
     stair_params = {}
     
-    # Number of Risers - try multiple parameter names
+    # Number of Risers - using the actual parameter names found in debug
     stair_params['NumberOfRisers'] = get_parameter_value_comprehensive(
         element,
         ["STAIRS_ATTR_TOTAL_RUN_RISERS", "STAIRS_ACTUAL_NUM_RISERS", "STAIRS_DESIRED_NUM_RISERS"],
         None,
-        ["Number of Risers", "Total Risers", "Actual Number of Risers", "Desired Number of Risers", "Risers"]
+        ["Actual Number of Risers", "Desired Number of Risers", "Number of Risers", "Total Risers", "Risers"]
     )
     
-    # Riser Height - try multiple parameter names
+    # Actual Riser Height - using the exact parameter name from debug
     stair_params['RiserHeight_mm'] = get_parameter_value_comprehensive(
         element,
         ["STAIRS_ATTR_RISER_HEIGHT_PARAM", "STAIRS_ACTUAL_RISER_HEIGHT", "STAIRS_DESIRED_RISER_HEIGHT"],
         get_unit_type_millimeters(),
-        ["Riser Height", "Actual Riser Height", "Desired Riser Height", "Maximum Riser Height"]
+        ["Actual Riser Height", "Maximum Riser Height", "Desired Riser Height", "Riser Height"]
     )
     
-    # Tread Depth - try multiple parameter names
+    # Actual Tread Depth (you mentioned "actual riser depth" but I think you meant tread depth)
     stair_params['TreadDepth_mm'] = get_parameter_value_comprehensive(
         element,
         ["STAIRS_ATTR_TREAD_DEPTH_PARAM", "STAIRS_ACTUAL_TREAD_DEPTH", "STAIRS_DESIRED_TREAD_DEPTH"],
         get_unit_type_millimeters(),
-        ["Tread Depth", "Actual Tread Depth", "Desired Tread Depth", "Minimum Tread Depth"]
+        ["Actual Tread Depth", "Minimum Tread Depth", "Desired Tread Depth", "Tread Depth"]
     )
     
-    # Stair Width - try multiple parameter names including generic width
+    # Actual Run Width - I need to find this parameter in your stairs
     stair_params['StairWidth_mm'] = get_parameter_value_comprehensive(
         element,
         ["STAIRS_ATTR_ACTUAL_RUN_WIDTH", "STAIRS_ATTR_RUN_WIDTH", "GENERIC_WIDTH", "FAMILY_WIDTH_PARAM"],
         get_unit_type_millimeters(),
-        ["Actual Run Width", "Run Width", "Width", "Stair Width", "Clear Width"]
+        ["Actual Run Width", "Run Width", "Minimum Run Width", "Width", "Stair Width", "Clear Width"]
     )
     
-    # Total Height - try multiple parameter names
+    # Total Height - using the desired stair height parameter found in debug
     stair_params['TotalHeight_mm'] = get_parameter_value_comprehensive(
         element,
         ["STAIRS_ATTR_TOTAL_HEIGHT", "STAIRS_ATTR_HEIGHT", "GENERIC_HEIGHT"],
         get_unit_type_millimeters(),
-        ["Total Height", "Height", "Stair Height", "Overall Height"]
+        ["Desired Stair Height", "Total Height", "Height", "Stair Height", "Overall Height"]
     )
     
     return stair_params
@@ -632,62 +632,54 @@ def calculate_material_area(element, material_id):
         return area_str if area_str != "N/A" else "N/A"
     except:
         return "N/A"
-    
-def debug_stair_parameters(element):
-    """Debug function to print all available parameters on a stair element"""
+
+def debug_stair_width_parameters(element):
+    """Enhanced debug function to find width-related parameters on stairs"""
     if not is_stair_element(element):
         return
     
-    print("=== DEBUG: Stair Element {} Parameters ===".format(element.Id.IntegerValue))
+    print("=== ENHANCED DEBUG: Stair Width Parameters for Element {} ===".format(element.Id.IntegerValue))
     
-    # Print all instance parameters
-    print("Instance Parameters:")
+    width_related_params = []
+    
+    # Check instance parameters
+    print("Instance Parameters (Width-related):")
     for param in element.Parameters:
         try:
             param_name = param.Definition.Name
-            if param.HasValue:
-                if param.StorageType == StorageType.Double:
-                    value = param.AsDouble()
-                    # Try to convert common units
-                    if "width" in param_name.lower() or "height" in param_name.lower() or "depth" in param_name.lower():
-                        mm_value = convert_from_internal_units(value, get_unit_type_millimeters())
-                        print("  {} = {} (internal) / {} mm".format(param_name, value, mm_value))
-                    else:
-                        print("  {} = {}".format(param_name, value))
-                elif param.StorageType == StorageType.Integer:
-                    print("  {} = {}".format(param_name, param.AsInteger()))
-                elif param.StorageType == StorageType.String:
-                    print("  {} = '{}'".format(param_name, param.AsString()))
-                else:
-                    print("  {} = {}".format(param_name, param.AsValueString()))
-        except:
-            print("  {} = [Error reading value]".format(param_name))
-    
-    # Print type parameters if available
-    element_type = doc.GetElement(element.GetTypeId())
-    if element_type:
-        print("Type Parameters:")
-        for param in element_type.Parameters:
-            try:
-                param_name = param.Definition.Name
+            if any(keyword in param_name.lower() for keyword in ['width', 'run', 'clear', 'actual']):
                 if param.HasValue:
                     if param.StorageType == StorageType.Double:
                         value = param.AsDouble()
-                        if "width" in param_name.lower() or "height" in param_name.lower() or "depth" in param_name.lower():
-                            mm_value = convert_from_internal_units(value, get_unit_type_millimeters())
-                            print("  {} = {} (internal) / {} mm".format(param_name, value, mm_value))
-                        else:
-                            print("  {} = {}".format(param_name, value))
-                    elif param.StorageType == StorageType.Integer:
-                        print("  {} = {}".format(param_name, param.AsInteger()))
-                    elif param.StorageType == StorageType.String:
-                        print("  {} = '{}'".format(param_name, param.AsString()))
+                        mm_value = convert_from_internal_units(value, get_unit_type_millimeters())
+                        print("  {} = {} mm".format(param_name, mm_value))
+                        width_related_params.append((param_name, mm_value))
                     else:
                         print("  {} = {}".format(param_name, param.AsValueString()))
-            except:
-                print("  {} = [Error reading value]".format(param_name))
+        except:
+            pass
     
-    print("=== END DEBUG ===")
+    # Check type parameters
+    element_type = doc.GetElement(element.GetTypeId())
+    if element_type:
+        print("Type Parameters (Width-related):")
+        for param in element_type.Parameters:
+            try:
+                param_name = param.Definition.Name
+                if any(keyword in param_name.lower() for keyword in ['width', 'run', 'clear', 'actual']):
+                    if param.HasValue:
+                        if param.StorageType == StorageType.Double:
+                            value = param.AsDouble()
+                            mm_value = convert_from_internal_units(value, get_unit_type_millimeters())
+                            print("  {} = {} mm".format(param_name, mm_value))
+                            width_related_params.append((param_name, mm_value))
+                        else:
+                            print("  {} = {}".format(param_name, param.AsValueString()))
+            except:
+                pass
+    
+    print("=== END ENHANCED DEBUG ===")
+    return width_related_params
 
 class MaterialDataExtractor:
     """Class to handle material data extraction with progress tracking"""
@@ -731,7 +723,7 @@ class MaterialDataExtractor:
             return material_usage_data
         except Exception as e:
             raise Exception("Error collecting comprehensive material data: {}".format(str(e)))
-  
+
     def _process_element(self, element):
         """Process a single element and return its material data"""
         try:
@@ -742,9 +734,10 @@ class MaterialDataExtractor:
             # Track stair elements and debug the first few
             if is_stair_element(element):
                 self.debug_info['stair_elements'] += 1
-                # Debug first 3 stair elements to see available parameters
+                # Enhanced debug for first 3 stair elements to find width parameters
                 if self.debug_info['stair_elements'] <= 3:
                     debug_stair_parameters(element)
+                    debug_stair_width_parameters(element)  # Add this line
             
             element_info = self._get_element_info(element)
             # Track elements with area/volume for debugging
@@ -768,6 +761,7 @@ class MaterialDataExtractor:
             self.debug_info['errors'] += 1
             print("Error processing element {}: {}".format(element.Id.IntegerValue, str(e)))
             return []
+
 
     def _create_basic_element_record(self, element, element_info):
         """Create a basic record for elements without specific materials"""
