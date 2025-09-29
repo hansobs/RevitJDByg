@@ -566,12 +566,13 @@ def save_to_csv(material_data):
             output.print_md("## Writing CSV File...")
             print("Writing {} material records to CSV...".format(len(material_data)))
             
-            # Use text mode instead of binary mode for CSV
-            with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
+            # Use binary mode for Python 2.7 compatibility
+            with open(file_path, 'wb') as csvfile:
                 if material_data:
                     fieldnames = material_data[0].keys()
                     writer = csv.DictWriter(csvfile, fieldnames=fieldnames,
-                                          delimiter=Config.CSV_DELIMITER)
+                                          delimiter=Config.CSV_DELIMITER, 
+                                          lineterminator='\n')
                     writer.writeheader()
                     
                     for i, material in enumerate(material_data):
@@ -580,7 +581,8 @@ def save_to_csv(material_data):
                             print("Writing record {} of {} ({}%)".format(i + 1, len(material_data), progress_percent))
                         writer.writerow(material)
                 else:
-                    writer = csv.writer(csvfile, delimiter=Config.CSV_DELIMITER)
+                    writer = csv.writer(csvfile, delimiter=Config.CSV_DELIMITER, 
+                                      lineterminator='\n')
                     headers = [
                         'ElementId', 'ElementCategory', 'ExportGUID', 'FamilyName', 'FamilyType', 'Type', 'TypeId',
                         'Width_mm', 'Height_mm', 'LayerIndex',
@@ -597,6 +599,7 @@ def save_to_csv(material_data):
             
     except Exception as e:
         raise Exception("Error saving CSV file: {}".format(str(e)))
+
 
 def main():
     """Main function that runs when the button is clicked"""
