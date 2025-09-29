@@ -398,7 +398,7 @@ def calculate_layer_volume(element, thickness_mm):
             area_str = get_element_area(element)
             if area_str != "N/A" and thickness_mm != "N/A":
                 try:
-                    area_sqm = float(area_str.replace(',', '.'))
+                    area_sqm = float(str(area_str).replace(',', '.'))
                     thickness_m = float(thickness_mm) / 1000.0  # Convert mm to m
                     volume_cum = area_sqm * thickness_m
                     return round(volume_cum, 5)
@@ -415,7 +415,7 @@ def calculate_material_volume(element, material_id, thickness):
             area_str = get_element_area(element)
             if area_str != "N/A" and thickness != "N/A":
                 try:
-                    area_sqm = float(area_str.replace(',', '.'))
+                    area_sqm = float(str(area_str).replace(',', '.'))
                     thickness_m = float(thickness) / 1000.0  # Convert mm to m
                     volume_cum = area_sqm * thickness_m
                     return round(volume_cum, 5)
@@ -446,26 +446,38 @@ class MaterialDataExtractor:
         self.output = output_window
         self.processed_elements = 0
         self.material_records = 0
+        self.debug_info = {
+            'total_elements': 0,
+            'elements_with_category': 0,
+            'elements_with_materials': 0,
+            'elements_with_layers': 0,
+            'elements_processed': 0
+        }
 
     def extract_all_materials(self):
         """Extract comprehensive material data from all elements"""
         material_usage_data = []
         try:
             elements = FilteredElementCollector(self.doc).WhereElementIsNotElementType().ToElements()
-            total_elements = len(elements)
+            self.debug_info['total_elements'] = len(elements)
+            
             self.output.print_md("## Starting Material Data Collection")
-            self.output.print_md("*Total elements to process:* {}".format(total_elements))
+            self.output.print_md("*Total elements to process:* {}".format(len(elements)))
             
             for i, element in enumerate(elements):
-                if i % Config.PROGRESS_UPDATE_INTERVAL == 0 or i == total_elements - 1:
-                    self._update_progress(i + 1, total_elements)
+                if i % Config.PROGRESS_UPDATE_INTERVAL == 0 or i == len(elements) - 1:
+                    self._update_progress(i + 1, len(elements))
+                
                 element_data = self._process_element(element)
                 if element_data:
                     material_usage_data.extend(element_data)
                     self.material_records += len(element_data)
+                    self.debug_info['elements_with_materials'] += 1
+                
                 self.processed_elements += 1
             
             self._print_completion_stats()
+            self._print_debug_info()
             return material_usage_data
         except Exception as e:
             raise Exception("Error collecting comprehensive material data: {}".format(str(e)))
@@ -475,13 +487,60 @@ class MaterialDataExtractor:
         try:
             if not element.Category:
                 return []
+            
+            self.debug_info['elements_with_category'] += 1
+            
             element_info = self._get_element_info(element)
             material_layers = get_material_layers(element)
-            if not material_layers:
-                return self._process_element_fallback(element, element_info)
-            else:
+            
+            if material_layers:
+                self.debug_info['elements_with_layers'] += 1
                 return self._process_element_layers(element, element_info, material_layers)
-        except Exception:
+            else:
+                # Try fallback method
+                fallback_data = self._process_element_fallback(element, element_info)
+                if fallback_data:
+                    return fallback_data
+                else:
+                    # Create a basic record even if no materials found
+                    return self._create_basic_element_record(element, element_info)
+        except Exception as e:
+            print("Error processing element {}: {}".format(element.Id.IntegerValue, str(e)))
+            return []
+
+    def _create_basic_element_record(self, element, element_info):
+        """Create a basic record for elements without specific materials"""
+        try:
+            # Only create records for certain categories that should have materials
+            relevant_categories = [
+                "Walls", "Floors", "Roofs", "Ceilings", "Structural Framing", 
+                "Structural Columns", "Doors", "Windows", "Furniture", "Casework"
+            ]
+            
+            if element.Category and element.Category.Name in relevant_categories:
+                basic_record = {
+                    'ElementId': element_info['element_id'],
+                    'ElementCategory': element_info['category'],
+                    'ExportGUID': element_info['export_guid'],
+                    'FamilyName': element_info['family_name'],
+                    'FamilyType': element_info['family_type'],
+                    'Type': element_info['element_type'],
+                    'TypeId': element_info['type_id'],
+                    'Width_mm': element_info['width'],
+                    'Height_mm': element_info['height'],
+                    'LayerIndex': 0,
+                    'MaterialId': "No Material",
+                    'MaterialName': "No Material",
+                    'MaterialClass': "Unknown",
+                    'Thickness_mm': get_element_thickness(element),
+                    'MaterialVolume_m3': "N/A",
+                    'MaterialArea_m2': element_info['area'],
+                    'ElementTotalVolume_m3': element_info['volume'],
+                    'ElementTotalArea_m2': element_info['area']
+                }
+                return [basic_record]
+            return []
+        except:
             return []
 
     def _get_element_info(self, element):
@@ -512,17 +571,20 @@ class MaterialDataExtractor:
         """Fallback processing for elements without compound structures"""
         material_records = []
         material_ids = get_element_material_ids(element)
-        for material_id in material_ids:
-            material = self.doc.GetElement(material_id)
-            if material:
-                layer_info = {
-                    'LayerIndex': 0,
-                    'MaterialId': material_id.IntegerValue,
-                    'MaterialName': material.Name if material.Name else "Unnamed Material",
-                    'Thickness_mm': get_material_thickness(element, material_id)
-                }
-                material_record = self._create_material_record(element, element_info, layer_info)
-                material_records.append(material_record)
+        
+        if material_ids:
+            for material_id in material_ids:
+                material = self.doc.GetElement(material_id)
+                if material:
+                    layer_info = {
+                        'LayerIndex': 0,
+                        'MaterialId': material_id.IntegerValue,
+                        'MaterialName': material.Name if material.Name else "Unnamed Material",
+                        'Thickness_mm': get_material_thickness(element, material_id)
+                    }
+                    material_record = self._create_material_record(element, element_info, layer_info)
+                    material_records.append(material_record)
+        
         return material_records
 
     def _create_material_record(self, element, element_info, layer_info):
@@ -578,6 +640,14 @@ class MaterialDataExtractor:
         self.output.print_md("## Collection Complete!")
         self.output.print_md("*Elements processed:* {}".format(self.processed_elements))
         self.output.print_md("*Material records created:* {}".format(self.material_records))
+
+    def _print_debug_info(self):
+        """Print debug information"""
+        self.output.print_md("## Debug Information")
+        self.output.print_md("*Total elements:* {}".format(self.debug_info['total_elements']))
+        self.output.print_md("*Elements with category:* {}".format(self.debug_info['elements_with_category']))
+        self.output.print_md("*Elements with materials:* {}".format(self.debug_info['elements_with_materials']))
+        self.output.print_md("*Elements with layers:* {}".format(self.debug_info['elements_with_layers']))
 
 def save_to_csv(material_data):
     """Save comprehensive material data to CSV file with semicolon delimiter"""
@@ -651,7 +721,7 @@ def main():
             start_time = time.time()
             
             output.close_others()
-            output.print_md("# ESG Material Data Export (Optimized)")
+            output.print_md("# ESG Material Data Export (Optimized with Debug)")
             output.print_md("*Started:* {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
             
             extractor = MaterialDataExtractor(doc, output)
@@ -659,7 +729,7 @@ def main():
             
             if not material_data:
                 MessageBox.Show(
-                    "No materials found in the current model.", 
+                    "No materials found in the current model.\n\nPlease check the debug information in the output window.", 
                     "No Data",
                     MessageBoxButtons.OK, 
                     MessageBoxIcon.Warning
