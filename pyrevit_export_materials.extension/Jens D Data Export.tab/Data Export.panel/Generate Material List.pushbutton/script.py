@@ -192,6 +192,7 @@ def debug_stair_parameters(element):
     
     print("=== END DEBUG ===")
 
+
 def get_stair_parameters(element):
     """Get stair-specific parameters with enhanced detection based on debug output"""
     if not is_stair_element(element):
@@ -223,13 +224,17 @@ def get_stair_parameters(element):
         ["Actual Tread Depth", "Minimum Tread Depth", "Desired Tread Depth", "Tread Depth"]
     )
     
-    # Actual Run Width - using the specific BuiltInParameter from the Danish code
-    stair_params['StairWidth_mm'] = get_parameter_value_comprehensive(
-        element,
-        ["STAIRS_ACTUAL_RUN_WIDTH", "STAIRS_ATTR_ACTUAL_RUN_WIDTH", "STAIRS_ATTR_RUN_WIDTH"],
-        get_unit_type_millimeters(),
-        ["Actual Run Width", "Run Width", "Minimum Run Width", "Width", "Stair Width", "Clear Width"]
-    )
+    # Actual Run Width - get from stair run elements
+    stair_params['StairWidth_mm'] = get_stair_run_width(element)
+    
+    # If that fails, fall back to Minimum Run Width from the stair element
+    if stair_params['StairWidth_mm'] == "N/A":
+        stair_params['StairWidth_mm'] = get_parameter_value_comprehensive(
+            element,
+            ["STAIRS_ATTR_RUN_WIDTH"],
+            get_unit_type_millimeters(),
+            ["Minimum Run Width", "Run Width", "Width"]
+        )
     
     # Total Height - using the desired stair height parameter found in debug
     stair_params['TotalHeight_mm'] = get_parameter_value_comprehensive(
@@ -240,6 +245,7 @@ def get_stair_parameters(element):
     )
     
     return stair_params
+
 
 def get_parameter_value_comprehensive(element, builtin_param_names, unit_type=None, fallback_param_names=None):
     """Comprehensive parameter value retrieval with multiple fallback methods"""
@@ -726,6 +732,54 @@ def debug_stair_builtin_parameters(element):
     
     print("=== END BUILTIN PARAMETER DEBUG ===")
 
+def debug_stair_run_parameters(element):
+    """Debug function to examine stair run elements and their parameters"""
+    if not is_stair_element(element):
+        return
+    
+    print("=== STAIR RUN DEBUG: Stair Element {} ===".format(element.Id.IntegerValue))
+    
+    try:
+        stair_runs = element.GetStairsRuns()
+        print("Number of stair runs: {}".format(len(stair_runs)))
+        
+        for i, run_id in enumerate(stair_runs):
+            run_element = doc.GetElement(run_id)
+            if run_element:
+                print("Run {} (ID: {}):".format(i + 1, run_id.IntegerValue))
+                
+                # Check for width-related parameters on the run
+                for param in run_element.Parameters:
+                    try:
+                        param_name = param.Definition.Name
+                        if any(keyword in param_name.lower() for keyword in ['width', 'run', 'actual']):
+                            if param.HasValue:
+                                if param.StorageType == StorageType.Double:
+                                    value = param.AsDouble()
+                                    mm_value = convert_from_internal_units(value, get_unit_type_millimeters())
+                                    print("  {} = {} mm".format(param_name, mm_value))
+                                else:
+                                    print("  {} = {}".format(param_name, param.AsValueString()))
+                    except:
+                        pass
+                        
+                # Try the specific BuiltInParameter
+                try:
+                    actual_width_param = run_element.get_Parameter(BuiltInParameter.STAIRS_ACTUAL_RUN_WIDTH)
+                    if actual_width_param and actual_width_param.HasValue:
+                        width_internal = actual_width_param.AsDouble()
+                        width_mm = convert_from_internal_units(width_internal, get_unit_type_millimeters())
+                        print("  STAIRS_ACTUAL_RUN_WIDTH (BuiltIn) = {} mm".format(width_mm))
+                    else:
+                        print("  STAIRS_ACTUAL_RUN_WIDTH (BuiltIn) = [No value]")
+                except Exception as e:
+                    print("  STAIRS_ACTUAL_RUN_WIDTH (BuiltIn) = [Error: {}]".format(str(e)))
+                    
+    except Exception as e:
+        print("Error accessing stair runs: {}".format(str(e)))
+    
+    print("=== END STAIR RUN DEBUG ===")
+
 
 def debug_stair_width_parameters(element):
     """Enhanced debug function to find width-related parameters on stairs"""
@@ -775,6 +829,46 @@ def debug_stair_width_parameters(element):
     print("=== END ENHANCED DEBUG ===")
     return width_related_params
 
+def get_stair_run_width(element):
+    """Get the actual run width from stair run elements"""
+    if not is_stair_element(element):
+        return "N/A"
+    
+    try:
+        # Get all stair run elements associated with this stair
+        stair_runs = element.GetStairsRuns()
+        
+        if stair_runs and len(stair_runs) > 0:
+            # Get the first run (or you could iterate through all runs)
+            first_run_id = stair_runs[0]
+            run_element = doc.GetElement(first_run_id)
+            
+            if run_element:
+                # Try to get the Actual Run Width parameter from the run element
+                run_width = get_parameter_value_comprehensive(
+                    run_element,
+                    ["STAIRS_ACTUAL_RUN_WIDTH", "STAIRS_ATTR_ACTUAL_RUN_WIDTH", "STAIRS_ATTR_RUN_WIDTH"],
+                    get_unit_type_millimeters(),
+                    ["Actual Run Width", "Run Width", "Width"]
+                )
+                
+                if run_width != "N/A":
+                    return run_width
+                    
+                # If that doesn't work, try to get it directly
+                try:
+                    actual_width_param = run_element.get_Parameter(BuiltInParameter.STAIRS_ACTUAL_RUN_WIDTH)
+                    if actual_width_param and actual_width_param.HasValue:
+                        width_internal = actual_width_param.AsDouble()
+                        width_mm = convert_from_internal_units(width_internal, get_unit_type_millimeters())
+                        return format_number(width_mm)
+                except:
+                    pass
+        
+        return "N/A"
+    except Exception as e:
+        print("Error getting stair run width for element {}: {}".format(element.Id.IntegerValue, str(e)))
+        return "N/A"
 
 class MaterialDataExtractor:
     """Class to handle material data extraction with progress tracking"""
@@ -810,10 +904,10 @@ class MaterialDataExtractor:
                 if self.debug_info['stair_elements'] <= 3:
                     debug_stair_parameters(element)
                     debug_stair_width_parameters(element)
-                    debug_stair_builtin_parameters(element)  # Add this line
+                    debug_stair_builtin_parameters(element)
+                    debug_stair_run_parameters(element)  # Add this line
             
             element_info = self._get_element_info(element)
-
             # Track elements with area/volume for debugging
             if element_info['area'] != "N/A":
                 self.debug_info['elements_with_area'] += 1
