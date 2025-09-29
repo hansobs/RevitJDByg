@@ -129,22 +129,17 @@ def get_category_material_info(element):
     except:
         return None
 
-
 def is_stair_element(element):
-    """Check if element is a stair with enhanced debugging"""
+    """Check if element is a stair (excluding stair paths)"""
     try:
         if element.Category:
             category_name = element.Category.Name
-            if category_name == "Stairs":
-                print("is_stair_element: Found stair with category '{}'".format(category_name))
-                return True
-            elif "stair" in category_name.lower():
-                print("is_stair_element: Found element with stair-like category '{}'".format(category_name))
+            if category_name == "Stairs":  # Only actual stairs, not stair paths
                 return True
         return False
     except Exception as e:
-        print("is_stair_element: Error checking element {}: {}".format(element.Id.IntegerValue, str(e)))
         return False
+
 
 def debug_stair_parameters(element):
     """Debug function to print all available parameters on a stair element"""
@@ -201,6 +196,69 @@ def debug_stair_parameters(element):
                 print("  {} = [Error reading value]".format(param_name))
     
     print("=== END DEBUG ===")
+
+def get_stair_materials(element):
+    """Get tread and riser materials from stair run type"""
+    if not is_stair_element(element):
+        return []
+    
+    stair_materials = []
+    
+    try:
+        # Get stair runs
+        stair_runs = element.GetStairsRuns()
+        if stair_runs and len(stair_runs) > 0:
+            for run_id in stair_runs:
+                run_element = doc.GetElement(run_id)
+                if run_element:
+                    # Get the run type
+                    run_type_id = run_element.GetTypeId()
+                    run_type = doc.GetElement(run_type_id)
+                    
+                    if run_type:
+                        # Try to get tread material
+                        tread_material_id = None
+                        riser_material_id = None
+                        
+                        # Look for tread and riser material parameters
+                        for param in run_type.Parameters:
+                            param_name = param.Definition.Name.lower()
+                            if "tread" in param_name and "material" in param_name:
+                                if param.HasValue and param.StorageType == StorageType.ElementId:
+                                    tread_material_id = param.AsElementId()
+                            elif "riser" in param_name and "material" in param_name:
+                                if param.HasValue and param.StorageType == StorageType.ElementId:
+                                    riser_material_id = param.AsElementId()
+                        
+                        # Add tread material if found
+                        if tread_material_id and tread_material_id != ElementId.InvalidElementId:
+                            tread_material = doc.GetElement(tread_material_id)
+                            if tread_material:
+                                stair_materials.append({
+                                    'LayerIndex': 0,
+                                    'MaterialId': tread_material_id.IntegerValue,
+                                    'MaterialName': tread_material.Name + " (Tread)",
+                                    'MaterialType': 'Tread',
+                                    'Thickness_mm': "N/A"  # Tread thickness would need separate calculation
+                                })
+                        
+                        # Add riser material if found
+                        if riser_material_id and riser_material_id != ElementId.InvalidElementId:
+                            riser_material = doc.GetElement(riser_material_id)
+                            if riser_material:
+                                stair_materials.append({
+                                    'LayerIndex': 1,
+                                    'MaterialId': riser_material_id.IntegerValue,
+                                    'MaterialName': riser_material.Name + " (Riser)",
+                                    'MaterialType': 'Riser',
+                                    'Thickness_mm': "N/A"  # Riser thickness would need separate calculation
+                                })
+        
+        return stair_materials
+        
+    except Exception as e:
+        print("Error getting stair materials for element {}: {}".format(element.Id.IntegerValue, str(e)))
+        return []
 
 
 def get_stair_parameters(element):
@@ -459,10 +517,19 @@ def get_export_guid(element):
         return str(guid_str) if guid_str else "N/A"
     except:
         return "N/A"
-  
+
 def get_material_layers(element):
-    """Returns all layers with material + thickness, including enhanced 'By Category' handling"""
+    """Returns all layers with material + thickness, including stair tread/riser materials"""
     results = []
+    
+    # Special handling for stairs
+    if is_stair_element(element):
+        stair_materials = get_stair_materials(element)
+        if stair_materials:
+            return stair_materials
+        # If no stair materials found, fall through to regular processing
+    
+    # Regular processing for non-stairs or stairs without specific materials
     try:
         element_type = doc.GetElement(element.GetTypeId())
         if hasattr(element_type, 'GetCompoundStructure'):
@@ -509,7 +576,8 @@ def get_material_layers(element):
             "Thickness_mm": "N/A"
         })
     return results
-  
+
+
 def get_element_type_name(element):
     """Get the element type name using comprehensive search"""
     try:
@@ -843,42 +911,28 @@ def get_stair_run_width(element):
     """Get the actual run width from stair run elements"""
     if not is_stair_element(element):
         return "N/A"
-    
     try:
         # Get all stair run elements associated with this stair
         stair_runs = element.GetStairsRuns()
-        
         if stair_runs and len(stair_runs) > 0:
             # Get the first run (or you could iterate through all runs)
             first_run_id = stair_runs[0]
             run_element = doc.GetElement(first_run_id)
-            
             if run_element:
-                # Try to get the Actual Run Width parameter from the run element
+                # Try to get the Actual Run Width parameter from the run element using string lookup
                 run_width = get_parameter_value_comprehensive(
                     run_element,
-                    ["STAIRS_ACTUAL_RUN_WIDTH", "STAIRS_ATTR_ACTUAL_RUN_WIDTH", "STAIRS_ATTR_RUN_WIDTH"],
+                    [],  # No BuiltInParameters work
                     get_unit_type_millimeters(),
                     ["Actual Run Width", "Run Width", "Width"]
                 )
-                
                 if run_width != "N/A":
                     return run_width
-                    
-                # If that doesn't work, try to get it directly
-                try:
-                    actual_width_param = run_element.get_Parameter(BuiltInParameter.STAIRS_ACTUAL_RUN_WIDTH)
-                    if actual_width_param and actual_width_param.HasValue:
-                        width_internal = actual_width_param.AsDouble()
-                        width_mm = convert_from_internal_units(width_internal, get_unit_type_millimeters())
-                        return format_number(width_mm)
-                except:
-                    pass
-        
         return "N/A"
     except Exception as e:
         print("Error getting stair run width for element {}: {}".format(element.Id.IntegerValue, str(e)))
         return "N/A"
+
 
 class MaterialDataExtractor:
     """Class to handle material data extraction with progress tracking"""
