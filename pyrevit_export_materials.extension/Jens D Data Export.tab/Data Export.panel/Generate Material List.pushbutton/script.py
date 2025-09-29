@@ -5,7 +5,6 @@ This script exports comprehensive material data from Revit to CSV format.
 __title__ = "Export ESG Data"
 __author__ = "Jens Damm & Hans Bohn Svendsen"
 
-# Remove the conflicting pyrevit.forms import
 from pyrevit.output import get_output
 import clr
 import csv
@@ -16,10 +15,9 @@ from datetime import datetime
 clr.AddReference('System.Windows.Forms')
 clr.AddReference('System')
 
-# Import only what you need from Windows Forms
 from System.Windows.Forms import (
     MessageBox, MessageBoxButtons, MessageBoxIcon, DialogResult, 
-    SaveFileDialog, FolderBrowserDialog
+    SaveFileDialog
 )
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
@@ -28,14 +26,12 @@ from Autodesk.Revit.UI import *
 doc = __revit__.ActiveUIDocument.Document
 output = get_output()
 
-
 # Configuration constants
 class Config:
     DEFAULT_DECIMALS = 5
     CSV_DELIMITER = ';'
     PROGRESS_UPDATE_INTERVAL = 50
     CSV_WRITE_INTERVAL = 500
-    
     @staticmethod
     def get_timestamp():
         return datetime.now().strftime("%Y%m%d %H%M")
@@ -65,62 +61,123 @@ def format_number(value, decimals=Config.DEFAULT_DECIMALS):
     except:
         return "N/A"
 
-def get_element_parameter(element, param_names, unit_type=None, fallback_builtin_params=None):
-    """Generic function to get parameter value from element or its type"""
+def get_builtin_parameter_value(element, builtin_params, unit_type=None, fallback_param_names=None):
+    """Get parameter value using BuiltInParameter first, then fallback to string lookup"""
     try:
-        # Try instance parameters first
-        for param_name in param_names:
-            param = element.LookupParameter(param_name)
-            if param and param.HasValue:
-                value = param.AsDouble() if unit_type else param.AsString()
-                if unit_type:
-                    value = UnitUtils.ConvertFromInternalUnits(value, unit_type)
-                return format_number(value, Config.DEFAULT_DECIMALS) if unit_type else value
+        # Try built-in parameters first (most efficient)
+        for builtin_param in builtin_params:
+            try:
+                param = element.get_Parameter(builtin_param)
+                if param and param.HasValue:
+                    if unit_type:
+                        value = param.AsDouble()
+                        value = UnitUtils.ConvertFromInternalUnits(value, unit_type)
+                        return format_number(value, Config.DEFAULT_DECIMALS)
+                    else:
+                        return param.AsString() or param.AsValueString()
+            except:
+                continue
         
-        # Try type parameters
+        # Try type parameters with built-in parameters
         element_type = doc.GetElement(element.GetTypeId())
         if element_type:
-            for param_name in param_names:
-                param = element_type.LookupParameter(param_name)
-                if param and param.HasValue:
-                    value = param.AsDouble() if unit_type else param.AsString()
-                    if unit_type:
-                        value = UnitUtils.ConvertFromInternalUnits(value, unit_type)
-                    return format_number(value, Config.DEFAULT_DECIMALS) if unit_type else value
-        
-        # Try built-in parameters as fallback
-        if fallback_builtin_params:
-            for builtin_param in fallback_builtin_params:
+            for builtin_param in builtin_params:
                 try:
-                    param = element.get_Parameter(builtin_param)
+                    param = element_type.get_Parameter(builtin_param)
                     if param and param.HasValue:
-                        value = param.AsDouble() if unit_type else param.AsString()
                         if unit_type:
+                            value = param.AsDouble()
                             value = UnitUtils.ConvertFromInternalUnits(value, unit_type)
-                        return format_number(value, Config.DEFAULT_DECIMALS) if unit_type else value
+                            return format_number(value, Config.DEFAULT_DECIMALS)
+                        else:
+                            return param.AsString() or param.AsValueString()
                 except:
                     continue
+        
+        # Fallback to string parameter lookup if provided
+        if fallback_param_names:
+            for param_name in fallback_param_names:
+                param = element.LookupParameter(param_name)
+                if param and param.HasValue:
+                    if unit_type:
+                        value = param.AsDouble()
+                        value = UnitUtils.ConvertFromInternalUnits(value, unit_type)
+                        return format_number(value, Config.DEFAULT_DECIMALS)
+                    else:
+                        return param.AsString() or param.AsValueString()
+            
+            # Try type parameters with string lookup
+            if element_type:
+                for param_name in fallback_param_names:
+                    param = element_type.LookupParameter(param_name)
+                    if param and param.HasValue:
+                        if unit_type:
+                            value = param.AsDouble()
+                            value = UnitUtils.ConvertFromInternalUnits(value, unit_type)
+                            return format_number(value, Config.DEFAULT_DECIMALS)
+                        else:
+                            return param.AsString() or param.AsValueString()
         
         return "N/A"
     except:
         return "N/A"
 
 def get_element_width(element):
-    """Get Width parameter from element"""
-    return get_element_parameter(
+    """Get Width parameter from element using BuiltInParameter"""
+    return get_builtin_parameter_value(
         element,
-        ["Width"],
+        [BuiltInParameter.DOOR_WIDTH, 
+         BuiltInParameter.WINDOW_WIDTH,
+         BuiltInParameter.GENERIC_WIDTH,
+         BuiltInParameter.FAMILY_WIDTH_PARAM],
         UnitTypeId.Millimeters,
-        [BuiltInParameter.DOOR_WIDTH, BuiltInParameter.WINDOW_WIDTH]
+        ["Width"]  # Fallback
     )
 
 def get_element_height(element):
-    """Get Height parameter from element"""
-    return get_element_parameter(
+    """Get Height parameter from element using BuiltInParameter"""
+    return get_builtin_parameter_value(
         element,
-        ["Height"],
+        [BuiltInParameter.DOOR_HEIGHT,
+         BuiltInParameter.WINDOW_HEIGHT,
+         BuiltInParameter.GENERIC_HEIGHT,
+         BuiltInParameter.FAMILY_HEIGHT_PARAM,
+         BuiltInParameter.WALL_USER_HEIGHT_PARAM],
         UnitTypeId.Millimeters,
-        [BuiltInParameter.DOOR_HEIGHT, BuiltInParameter.WINDOW_HEIGHT]
+        ["Height"]  # Fallback
+    )
+
+def get_element_thickness(element):
+    """Get Thickness parameter from element using BuiltInParameter"""
+    return get_builtin_parameter_value(
+        element,
+        [BuiltInParameter.WALL_ATTR_WIDTH_PARAM,
+         BuiltInParameter.GENERIC_THICKNESS,
+         BuiltInParameter.FAMILY_THICKNESS_PARAM],
+        UnitTypeId.Millimeters,
+        ["Thickness"]  # Fallback
+    )
+
+def get_element_area(element):
+    """Get Area parameter from element using BuiltInParameter"""
+    return get_builtin_parameter_value(
+        element,
+        [BuiltInParameter.HOST_AREA_COMPUTED,
+         BuiltInParameter.ROOM_AREA,
+         BuiltInParameter.SPACE_ASSOC_ROOM_AREA],
+        UnitTypeId.SquareMeters,
+        ["Area"]  # Fallback
+    )
+
+def get_element_volume(element):
+    """Get Volume parameter from element using BuiltInParameter"""
+    return get_builtin_parameter_value(
+        element,
+        [BuiltInParameter.HOST_VOLUME_COMPUTED,
+         BuiltInParameter.ROOM_VOLUME,
+         BuiltInParameter.SPACE_ASSOC_ROOM_VOLUME],
+        UnitTypeId.CubicMeters,
+        ["Volume"]  # Fallback
     )
 
 @safe_execution()
@@ -157,16 +214,14 @@ def get_material_layers(element):
                         "Thickness_mm": round(thickness_mm, 2)
                     })
             else:
-                t_param = element.LookupParameter("Thickness")
-                if t_param and t_param.HasValue:
-                    thickness_mm = UnitUtils.ConvertFromInternalUnits(
-                        t_param.AsDouble(), UnitTypeId.Millimeters
-                    )
+                # Try to get thickness using BuiltInParameter first
+                thickness = get_element_thickness(element)
+                if thickness != "N/A":
                     results.append({
                         "LayerIndex": 0,
                         "MaterialId": "N/A",
                         "MaterialName": "N/A",
-                        "Thickness_mm": round(thickness_mm, 2)
+                        "Thickness_mm": thickness
                     })
     except Exception as e:
         results.append({
@@ -178,19 +233,30 @@ def get_material_layers(element):
     return results
 
 def get_element_type_name(element):
-    """Get the element type name"""
+    """Get the element type name using BuiltInParameter"""
     try:
+        # Try BuiltInParameter first
+        type_name = get_builtin_parameter_value(
+            element,
+            [BuiltInParameter.ELEM_TYPE_PARAM,
+             BuiltInParameter.SYMBOL_NAME_PARAM],
+            None,
+            ["Type Name"]  # Fallback
+        )
+        
+        if type_name != "N/A":
+            return type_name
+        
+        # Fallback to element type access
         type_id = element.GetTypeId()
         if type_id == ElementId.InvalidElementId:
             return "No TypeId"
-        
         element_type = doc.GetElement(type_id)
         if element_type:
             if hasattr(element_type, 'Name'):
                 name = element_type.Name
                 if name and name.strip():
                     return name
-            
             if hasattr(element_type, 'get_Name'):
                 try:
                     name = element_type.get_Name()
@@ -198,14 +264,6 @@ def get_element_type_name(element):
                         return name
                 except:
                     pass
-            
-            try:
-                type_name_param = element_type.LookupParameter("Type Name")
-                if type_name_param and type_name_param.HasValue:
-                    return type_name_param.AsString()
-            except:
-                pass
-            
             try:
                 if element_type.Category:
                     return "{} - ID {}".format(element_type.Category.Name, element_type.Id.IntegerValue)
@@ -214,6 +272,7 @@ def get_element_type_name(element):
             except:
                 pass
         
+        # Additional fallbacks
         if hasattr(element, 'Symbol') and element.Symbol:
             return element.Symbol.Name
         elif hasattr(element, 'WallType') and element.WallType:
@@ -222,14 +281,26 @@ def get_element_type_name(element):
             return element.FloorType.Name
         elif hasattr(element, 'RoofType') and element.RoofType:
             return element.RoofType.Name
-        
         return "No type found"
     except Exception as e:
         return "Exception: {}".format(str(e))
 
 def get_family_name(element):
-    """Get family name from element"""
+    """Get family name from element using BuiltInParameter"""
     try:
+        # Try BuiltInParameter first
+        family_name = get_builtin_parameter_value(
+            element,
+            [BuiltInParameter.ELEM_FAMILY_PARAM,
+             BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM],
+            None,
+            ["Family"]  # Fallback
+        )
+        
+        if family_name != "N/A":
+            return family_name
+        
+        # Fallback methods
         if hasattr(element, 'Symbol') and element.Symbol:
             return element.Symbol.Family.Name
         elif hasattr(element, 'WallType'):
@@ -244,12 +315,21 @@ def get_family_name(element):
         return "Unknown"
 
 def get_family_type(element):
-    """Get family type name from element using 'Family and Type' parameter"""
+    """Get family type name from element using BuiltInParameter"""
     try:
-        family_type_param = element.LookupParameter("Family and Type")
-        if family_type_param and family_type_param.HasValue:
-            return family_type_param.AsValueString()
+        # Try BuiltInParameter first
+        family_type = get_builtin_parameter_value(
+            element,
+            [BuiltInParameter.ELEM_FAMILY_AND_TYPE_PARAM,
+             BuiltInParameter.SYMBOL_FAMILY_AND_TYPE_NAMES_PARAM],
+            None,
+            ["Family and Type"]  # Fallback
+        )
         
+        if family_type != "N/A":
+            return family_type
+        
+        # Fallback methods
         if hasattr(element, 'Symbol') and element.Symbol:
             return element.Symbol.Name
         elif hasattr(element, 'WallType'):
@@ -277,13 +357,11 @@ def get_element_material_ids(element):
                     for layer in layers:
                         if layer.MaterialId != ElementId.InvalidElementId:
                             material_ids.append(layer.MaterialId)
-        
         try:
             element_material_ids = element.GetMaterialIds(False)
             material_ids.extend(element_material_ids)
         except:
             pass
-        
         valid_ids = []
         for mat_id in material_ids:
             if mat_id != ElementId.InvalidElementId and mat_id not in valid_ids:
@@ -306,11 +384,9 @@ def get_material_thickness(element, material_id):
                         thickness_mm = UnitUtils.ConvertFromInternalUnits(thickness_feet, UnitTypeId.Millimeters)
                         return round(thickness_mm, 5)
         
-        thickness_param = element.LookupParameter("Thickness")
-        if thickness_param and thickness_param.HasValue:
-            thickness_mm = UnitUtils.ConvertFromInternalUnits(thickness_param.AsDouble(), UnitTypeId.Millimeters)
-            return round(thickness_mm, 5)
-        return "N/A"
+        # Use BuiltInParameter for thickness
+        thickness = get_element_thickness(element)
+        return thickness if thickness != "N/A" else "N/A"
     except:
         return "N/A"
 
@@ -318,13 +394,16 @@ def calculate_layer_volume(element, thickness_mm):
     """Calculate volume for a specific layer thickness"""
     try:
         if hasattr(element, 'WallType') or hasattr(element, 'FloorType'):
-            area_param = element.LookupParameter("Area")
-            if area_param and area_param.HasValue and thickness_mm != "N/A":
-                area_sqft = area_param.AsDouble()
-                thickness_ft = UnitUtils.ConvertToInternalUnits(float(thickness_mm), UnitTypeId.Millimeters)
-                volume_cuft = area_sqft * thickness_ft
-                volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
-                return round(volume_cum, 5)
+            # Use BuiltInParameter for area
+            area_str = get_element_area(element)
+            if area_str != "N/A" and thickness_mm != "N/A":
+                try:
+                    area_sqm = float(area_str.replace(',', '.'))
+                    thickness_m = float(thickness_mm) / 1000.0  # Convert mm to m
+                    volume_cum = area_sqm * thickness_m
+                    return round(volume_cum, 5)
+                except:
+                    pass
         return "N/A"
     except:
         return "N/A"
@@ -333,19 +412,21 @@ def calculate_material_volume(element, material_id, thickness):
     """Calculate volume of specific material in element"""
     try:
         if hasattr(element, 'WallType') or hasattr(element, 'FloorType'):
-            area_param = element.LookupParameter("Area")
-            if area_param and area_param.HasValue and thickness != "N/A":
-                area_sqft = area_param.AsDouble()
-                thickness_ft = UnitUtils.ConvertToInternalUnits(float(thickness), UnitTypeId.Millimeters)
-                volume_cuft = area_sqft * thickness_ft
-                volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
-                return round(volume_cum, 5)
+            area_str = get_element_area(element)
+            if area_str != "N/A" and thickness != "N/A":
+                try:
+                    area_sqm = float(area_str.replace(',', '.'))
+                    thickness_m = float(thickness) / 1000.0  # Convert mm to m
+                    volume_cum = area_sqm * thickness_m
+                    return round(volume_cum, 5)
+                except:
+                    pass
         
-        volume_param = element.LookupParameter("Volume")
-        if volume_param and volume_param.HasValue:
-            volume_cuft = volume_param.AsDouble()
-            volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
-            return round(volume_cum, 5)
+        # Fallback to element volume
+        volume_str = get_element_volume(element)
+        if volume_str != "N/A":
+            return volume_str
+        
         return "N/A"
     except:
         return "N/A"
@@ -353,95 +434,58 @@ def calculate_material_volume(element, material_id, thickness):
 def calculate_material_area(element, material_id):
     """Calculate area of specific material in element"""
     try:
-        area_param = element.LookupParameter("Area")
-        if area_param and area_param.HasValue:
-            area_sqft = area_param.AsDouble()
-            area_sqm = UnitUtils.ConvertFromInternalUnits(area_sqft, UnitTypeId.SquareMeters)
-            return round(area_sqm, 5)
-        return "N/A"
-    except:
-        return "N/A"
-
-def get_element_volume(element):
-    """Get total volume of element"""
-    try:
-        volume_param = element.LookupParameter("Volume")
-        if volume_param and volume_param.HasValue:
-            volume_cuft = volume_param.AsDouble()
-            volume_cum = UnitUtils.ConvertFromInternalUnits(volume_cuft, UnitTypeId.CubicMeters)
-            return round(volume_cum, 5)
-        return "N/A"
-    except:
-        return "N/A"
-
-def get_element_area(element):
-    """Get total area of element"""
-    try:
-        area_param = element.LookupParameter("Area")
-        if area_param and area_param.HasValue:
-            area_sqft = area_param.AsDouble()
-            area_sqm = UnitUtils.ConvertFromInternalUnits(area_sqft, UnitTypeId.SquareMeters)
-            return round(area_sqm, 5)
-        return "N/A"
+        area_str = get_element_area(element)
+        return area_str if area_str != "N/A" else "N/A"
     except:
         return "N/A"
 
 class MaterialDataExtractor:
     """Class to handle material data extraction with progress tracking"""
-    
     def __init__(self, document, output_window):
         self.doc = document
         self.output = output_window
         self.processed_elements = 0
         self.material_records = 0
-    
+
     def extract_all_materials(self):
         """Extract comprehensive material data from all elements"""
         material_usage_data = []
-        
         try:
             elements = FilteredElementCollector(self.doc).WhereElementIsNotElementType().ToElements()
             total_elements = len(elements)
-            
             self.output.print_md("## Starting Material Data Collection")
             self.output.print_md("*Total elements to process:* {}".format(total_elements))
             
             for i, element in enumerate(elements):
                 if i % Config.PROGRESS_UPDATE_INTERVAL == 0 or i == total_elements - 1:
                     self._update_progress(i + 1, total_elements)
-                
                 element_data = self._process_element(element)
                 if element_data:
                     material_usage_data.extend(element_data)
                     self.material_records += len(element_data)
-                
                 self.processed_elements += 1
             
             self._print_completion_stats()
             return material_usage_data
-            
         except Exception as e:
             raise Exception("Error collecting comprehensive material data: {}".format(str(e)))
-    
+
     def _process_element(self, element):
         """Process a single element and return its material data"""
         try:
             if not element.Category:
                 return []
-            
             element_info = self._get_element_info(element)
             material_layers = get_material_layers(element)
-            
             if not material_layers:
                 return self._process_element_fallback(element, element_info)
             else:
                 return self._process_element_layers(element, element_info, material_layers)
-                
         except Exception:
             return []
-    
+
     def _get_element_info(self, element):
-        """Get common element information"""
+        """Get common element information using optimized parameter access"""
         return {
             'element_id': element.Id.IntegerValue,
             'category': element.Category.Name if element.Category else "Unknown",
@@ -455,22 +499,19 @@ class MaterialDataExtractor:
             'volume': get_element_volume(element),
             'area': get_element_area(element)
         }
-    
+
     def _process_element_layers(self, element, element_info, material_layers):
         """Process element using material layers"""
         material_records = []
-        
         for layer in material_layers:
             material_record = self._create_material_record(element, element_info, layer)
             material_records.append(material_record)
-        
         return material_records
-    
+
     def _process_element_fallback(self, element, element_info):
         """Fallback processing for elements without compound structures"""
         material_records = []
         material_ids = get_element_material_ids(element)
-        
         for material_id in material_ids:
             material = self.doc.GetElement(material_id)
             if material:
@@ -482,9 +523,8 @@ class MaterialDataExtractor:
                 }
                 material_record = self._create_material_record(element, element_info, layer_info)
                 material_records.append(material_record)
-        
         return material_records
-    
+
     def _create_material_record(self, element, element_info, layer_info):
         """Create a standardized material record"""
         thickness = layer_info.get('Thickness_mm', "N/A")
@@ -511,7 +551,7 @@ class MaterialDataExtractor:
             'ElementTotalVolume_m3': format_number(element_info['volume']),
             'ElementTotalArea_m2': format_number(element_info['area'])
         }
-    
+
     def _get_material_class(self, layer_info):
         """Get material class from layer info"""
         material_id = layer_info.get('MaterialId')
@@ -525,14 +565,14 @@ class MaterialDataExtractor:
                 return material.MaterialClass if material and hasattr(material, 'MaterialClass') else "Unknown"
             except:
                 return "Unknown"
-    
+
     def _update_progress(self, current, total):
         """Update progress display"""
         progress_percent = int(current * 100 / total)
         self.output.update_progress(current, total)
         print("Processing element {} of {} ({}%) - {} material records so far".format(
             current, total, progress_percent, self.material_records))
-    
+
     def _print_completion_stats(self):
         """Print completion statistics"""
         self.output.print_md("## Collection Complete!")
@@ -542,23 +582,20 @@ class MaterialDataExtractor:
 def save_to_csv(material_data):
     """Save comprehensive material data to CSV file with semicolon delimiter"""
     try:
-        # Create and configure the SaveFileDialog properly
         save_dialog = SaveFileDialog()
         save_dialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
         save_dialog.FilterIndex = 1
         save_dialog.RestoreDirectory = True
         
-        # Use a more reliable path method
         try:
             initial_dir = os.path.join(os.path.expanduser("~"), "Documents")
             if os.path.exists(initial_dir):
                 save_dialog.InitialDirectory = initial_dir
         except:
-            pass  # Fall back to default directory
+            pass
             
         save_dialog.FileName = "ESG_Material_Export_{}".format(Config.get_timestamp())
         
-        # Show dialog and handle result
         dialog_result = save_dialog.ShowDialog()
         
         if dialog_result == DialogResult.OK:
@@ -600,11 +637,9 @@ def save_to_csv(material_data):
     except Exception as e:
         raise Exception("Error saving CSV file: {}".format(str(e)))
 
-
 def main():
     """Main function that runs when the button is clicked"""
     try:
-        # Show confirmation dialog
         result = MessageBox.Show(
             "This will generate a comprehensive material list export for ESG/CO2 analysis.\n\nDo you want to proceed?",
             "Export ESG Material Data",
@@ -615,12 +650,10 @@ def main():
         if result == DialogResult.Yes:
             start_time = time.time()
             
-            # Clear output window
             output.close_others()
-            output.print_md("# ESG Material Data Export")
+            output.print_md("# ESG Material Data Export (Optimized)")
             output.print_md("*Started:* {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
             
-            # Extract material data
             extractor = MaterialDataExtractor(doc, output)
             material_data = extractor.extract_all_materials()
             
@@ -633,7 +666,6 @@ def main():
                 )
                 return
             
-            # Save to CSV
             file_path, count = save_to_csv(material_data)
             
             end_time = time.time()
@@ -671,7 +703,7 @@ def main():
             
     except Exception as e:
         error_msg = "An error occurred during export:\n\n{}".format(str(e))
-        print("ERROR: {}".format(error_msg))  # Also print to console for debugging
+        print("ERROR: {}".format(error_msg))
         MessageBox.Show(
             error_msg,
             "Export Error", 
