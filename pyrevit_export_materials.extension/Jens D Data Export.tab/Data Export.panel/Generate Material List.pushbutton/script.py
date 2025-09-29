@@ -75,7 +75,6 @@ def get_safe_builtin_params(param_names):
             param_value = getattr(BuiltInParameter, param_name)
             safe_params.append(param_value)
         except AttributeError:
-            # Parameter doesn't exist in this version, skip it
             continue
     return safe_params
 
@@ -114,13 +113,11 @@ def format_number(value, decimals=Config.DEFAULT_DECIMALS):
     except:
         return "N/A"
 
-def get_builtin_parameter_value(element, builtin_param_names, unit_type=None, fallback_param_names=None):
-    """Get parameter value using BuiltInParameter first, then fallback to string lookup"""
+def get_parameter_value_comprehensive(element, builtin_param_names, unit_type=None, fallback_param_names=None):
+    """Comprehensive parameter value retrieval with multiple fallback methods"""
     try:
-        # Get safe BuiltInParameters that exist in this version
+        # Method 1: Try safe BuiltInParameters
         safe_builtin_params = get_safe_builtin_params(builtin_param_names)
-        
-        # Try built-in parameters first (most efficient)
         for builtin_param in safe_builtin_params:
             try:
                 param = element.get_Parameter(builtin_param)
@@ -134,7 +131,7 @@ def get_builtin_parameter_value(element, builtin_param_names, unit_type=None, fa
             except:
                 continue
         
-        # Try type parameters with built-in parameters
+        # Method 2: Try type parameters with BuiltInParameters
         element_type = doc.GetElement(element.GetTypeId())
         if element_type:
             for builtin_param in safe_builtin_params:
@@ -150,22 +147,11 @@ def get_builtin_parameter_value(element, builtin_param_names, unit_type=None, fa
                 except:
                     continue
         
-        # Fallback to string parameter lookup if provided
+        # Method 3: Try string parameter lookup (instance)
         if fallback_param_names:
             for param_name in fallback_param_names:
-                param = element.LookupParameter(param_name)
-                if param and param.HasValue:
-                    if unit_type:
-                        value = param.AsDouble()
-                        value = convert_from_internal_units(value, unit_type)
-                        return format_number(value, Config.DEFAULT_DECIMALS)
-                    else:
-                        return param.AsString() or param.AsValueString()
-            
-            # Try type parameters with string lookup
-            if element_type:
-                for param_name in fallback_param_names:
-                    param = element_type.LookupParameter(param_name)
+                try:
+                    param = element.LookupParameter(param_name)
                     if param and param.HasValue:
                         if unit_type:
                             value = param.AsDouble()
@@ -173,54 +159,135 @@ def get_builtin_parameter_value(element, builtin_param_names, unit_type=None, fa
                             return format_number(value, Config.DEFAULT_DECIMALS)
                         else:
                             return param.AsString() or param.AsValueString()
+                except:
+                    continue
+            
+            # Method 4: Try string parameter lookup (type)
+            if element_type:
+                for param_name in fallback_param_names:
+                    try:
+                        param = element_type.LookupParameter(param_name)
+                        if param and param.HasValue:
+                            if unit_type:
+                                value = param.AsDouble()
+                                value = convert_from_internal_units(value, unit_type)
+                                return format_number(value, Config.DEFAULT_DECIMALS)
+                            else:
+                                return param.AsString() or param.AsValueString()
+                    except:
+                        continue
+        
+        return "N/A"
+    except:
+        return "N/A"
+
+def get_element_area_robust(element):
+    """Get area with multiple fallback methods"""
+    try:
+        # Method 1: Try comprehensive parameter search
+        area_result = get_parameter_value_comprehensive(
+            element,
+            ["HOST_AREA_COMPUTED", "ROOM_AREA"],
+            get_unit_type_square_meters(),
+            ["Area", "Gross Surface Area", "Net Surface Area"]
+        )
+        
+        if area_result != "N/A":
+            return area_result
+        
+        # Method 2: Direct parameter access for common elements
+        try:
+            if hasattr(element, 'WallType') or hasattr(element, 'FloorType') or hasattr(element, 'RoofType'):
+                # Try to get area parameter directly
+                area_param = element.LookupParameter("Area")
+                if area_param and area_param.HasValue:
+                    area_sqft = area_param.AsDouble()
+                    area_sqm = convert_from_internal_units(area_sqft, get_unit_type_square_meters())
+                    return format_number(area_sqm)
+        except:
+            pass
+        
+        # Method 3: Try all parameters to find area-related ones
+        try:
+            for param in element.Parameters:
+                if param.Definition.Name.lower() in ['area', 'surface area', 'gross area', 'net area']:
+                    if param.HasValue and param.StorageType == StorageType.Double:
+                        value = param.AsDouble()
+                        if value > 0:  # Only positive areas make sense
+                            area_sqm = convert_from_internal_units(value, get_unit_type_square_meters())
+                            return format_number(area_sqm)
+        except:
+            pass
+        
+        return "N/A"
+    except:
+        return "N/A"
+
+def get_element_volume_robust(element):
+    """Get volume with multiple fallback methods"""
+    try:
+        # Method 1: Try comprehensive parameter search
+        volume_result = get_parameter_value_comprehensive(
+            element,
+            ["HOST_VOLUME_COMPUTED", "ROOM_VOLUME"],
+            get_unit_type_cubic_meters(),
+            ["Volume", "Gross Volume", "Net Volume"]
+        )
+        
+        if volume_result != "N/A":
+            return volume_result
+        
+        # Method 2: Direct parameter access
+        try:
+            volume_param = element.LookupParameter("Volume")
+            if volume_param and volume_param.HasValue:
+                volume_cuft = volume_param.AsDouble()
+                volume_cum = convert_from_internal_units(volume_cuft, get_unit_type_cubic_meters())
+                return format_number(volume_cum)
+        except:
+            pass
+        
+        # Method 3: Try all parameters to find volume-related ones
+        try:
+            for param in element.Parameters:
+                if param.Definition.Name.lower() in ['volume', 'gross volume', 'net volume']:
+                    if param.HasValue and param.StorageType == StorageType.Double:
+                        value = param.AsDouble()
+                        if value > 0:  # Only positive volumes make sense
+                            volume_cum = convert_from_internal_units(value, get_unit_type_cubic_meters())
+                            return format_number(volume_cum)
+        except:
+            pass
         
         return "N/A"
     except:
         return "N/A"
 
 def get_element_width(element):
-    """Get Width parameter from element using BuiltInParameter"""
-    return get_builtin_parameter_value(
+    """Get Width parameter from element using comprehensive search"""
+    return get_parameter_value_comprehensive(
         element,
         ["DOOR_WIDTH", "WINDOW_WIDTH", "GENERIC_WIDTH", "FAMILY_WIDTH_PARAM"],
         get_unit_type_millimeters(),
-        ["Width"]  # Fallback
+        ["Width", "Rough Width", "Opening Width"]
     )
 
 def get_element_height(element):
-    """Get Height parameter from element using BuiltInParameter"""
-    return get_builtin_parameter_value(
+    """Get Height parameter from element using comprehensive search"""
+    return get_parameter_value_comprehensive(
         element,
         ["DOOR_HEIGHT", "WINDOW_HEIGHT", "GENERIC_HEIGHT", "FAMILY_HEIGHT_PARAM", "WALL_USER_HEIGHT_PARAM"],
         get_unit_type_millimeters(),
-        ["Height"]  # Fallback
+        ["Height", "Rough Height", "Opening Height", "Unconnected Height"]
     )
 
 def get_element_thickness(element):
-    """Get Thickness parameter from element using BuiltInParameter"""
-    return get_builtin_parameter_value(
+    """Get Thickness parameter from element using comprehensive search"""
+    return get_parameter_value_comprehensive(
         element,
         ["WALL_ATTR_WIDTH_PARAM", "GENERIC_THICKNESS", "FAMILY_THICKNESS_PARAM"],
         get_unit_type_millimeters(),
-        ["Thickness"]  # Fallback
-    )
-
-def get_element_area(element):
-    """Get Area parameter from element using BuiltInParameter"""
-    return get_builtin_parameter_value(
-        element,
-        ["HOST_AREA_COMPUTED", "ROOM_AREA", "SPACE_ASSOC_ROOM_AREA"],
-        get_unit_type_square_meters(),
-        ["Area"]  # Fallback
-    )
-
-def get_element_volume(element):
-    """Get Volume parameter from element using BuiltInParameter"""
-    return get_builtin_parameter_value(
-        element,
-        ["HOST_VOLUME_COMPUTED", "ROOM_VOLUME", "SPACE_ASSOC_ROOM_VOLUME"],
-        get_unit_type_cubic_meters(),
-        ["Volume"]  # Fallback
+        ["Thickness", "Width"]
     )
 
 @safe_execution()
@@ -259,7 +326,7 @@ def get_material_layers(element):
                         "Thickness_mm": round(thickness_mm, 2)
                     })
             else:
-                # Try to get thickness using BuiltInParameter first
+                # Try to get thickness using comprehensive search
                 thickness = get_element_thickness(element)
                 if thickness != "N/A":
                     results.append({
@@ -278,14 +345,14 @@ def get_material_layers(element):
     return results
 
 def get_element_type_name(element):
-    """Get the element type name using BuiltInParameter"""
+    """Get the element type name using comprehensive search"""
     try:
-        # Try BuiltInParameter first
-        type_name = get_builtin_parameter_value(
+        # Try comprehensive parameter search first
+        type_name = get_parameter_value_comprehensive(
             element,
             ["ELEM_TYPE_PARAM", "SYMBOL_NAME_PARAM"],
             None,
-            ["Type Name"]  # Fallback
+            ["Type Name", "Family and Type", "Type"]
         )
         
         if type_name != "N/A":
@@ -330,14 +397,14 @@ def get_element_type_name(element):
         return "Exception: {}".format(str(e))
 
 def get_family_name(element):
-    """Get family name from element using BuiltInParameter"""
+    """Get family name from element using comprehensive search"""
     try:
-        # Try BuiltInParameter first
-        family_name = get_builtin_parameter_value(
+        # Try comprehensive parameter search first
+        family_name = get_parameter_value_comprehensive(
             element,
             ["ELEM_FAMILY_PARAM", "SYMBOL_FAMILY_NAME_PARAM"],
             None,
-            ["Family"]  # Fallback
+            ["Family", "Family Name"]
         )
         
         if family_name != "N/A":
@@ -358,14 +425,14 @@ def get_family_name(element):
         return "Unknown"
 
 def get_family_type(element):
-    """Get family type name from element using BuiltInParameter"""
+    """Get family type name from element using comprehensive search"""
     try:
-        # Try BuiltInParameter first
-        family_type = get_builtin_parameter_value(
+        # Try comprehensive parameter search first
+        family_type = get_parameter_value_comprehensive(
             element,
             ["ELEM_FAMILY_AND_TYPE_PARAM", "SYMBOL_FAMILY_AND_TYPE_NAMES_PARAM"],
             None,
-            ["Family and Type"]  # Fallback
+            ["Family and Type", "Type"]
         )
         
         if family_type != "N/A":
@@ -426,7 +493,7 @@ def get_material_thickness(element, material_id):
                         thickness_mm = convert_from_internal_units(thickness_feet, get_unit_type_millimeters())
                         return round(thickness_mm, 5)
         
-        # Use BuiltInParameter for thickness
+        # Use comprehensive thickness search
         thickness = get_element_thickness(element)
         return thickness if thickness != "N/A" else "N/A"
     except:
@@ -436,8 +503,8 @@ def calculate_layer_volume(element, thickness_mm):
     """Calculate volume for a specific layer thickness"""
     try:
         if hasattr(element, 'WallType') or hasattr(element, 'FloorType'):
-            # Use BuiltInParameter for area
-            area_str = get_element_area(element)
+            # Use robust area calculation
+            area_str = get_element_area_robust(element)
             if area_str != "N/A" and thickness_mm != "N/A":
                 try:
                     area_sqm = float(str(area_str).replace(',', '.'))
@@ -454,7 +521,7 @@ def calculate_material_volume(element, material_id, thickness):
     """Calculate volume of specific material in element"""
     try:
         if hasattr(element, 'WallType') or hasattr(element, 'FloorType'):
-            area_str = get_element_area(element)
+            area_str = get_element_area_robust(element)
             if area_str != "N/A" and thickness != "N/A":
                 try:
                     area_sqm = float(str(area_str).replace(',', '.'))
@@ -465,7 +532,7 @@ def calculate_material_volume(element, material_id, thickness):
                     pass
         
         # Fallback to element volume
-        volume_str = get_element_volume(element)
+        volume_str = get_element_volume_robust(element)
         if volume_str != "N/A":
             return volume_str
         
@@ -476,7 +543,7 @@ def calculate_material_volume(element, material_id, thickness):
 def calculate_material_area(element, material_id):
     """Calculate area of specific material in element"""
     try:
-        area_str = get_element_area(element)
+        area_str = get_element_area_robust(element)
         return area_str if area_str != "N/A" else "N/A"
     except:
         return "N/A"
@@ -494,7 +561,9 @@ class MaterialDataExtractor:
             'elements_with_materials': 0,
             'elements_with_layers': 0,
             'elements_processed': 0,
-            'errors': 0
+            'errors': 0,
+            'elements_with_area': 0,
+            'elements_with_volume': 0
         }
 
     def extract_all_materials(self):
@@ -534,6 +603,13 @@ class MaterialDataExtractor:
             self.debug_info['elements_with_category'] += 1
             
             element_info = self._get_element_info(element)
+            
+            # Track elements with area/volume for debugging
+            if element_info['area'] != "N/A":
+                self.debug_info['elements_with_area'] += 1
+            if element_info['volume'] != "N/A":
+                self.debug_info['elements_with_volume'] += 1
+            
             material_layers = get_material_layers(element)
             
             if material_layers:
@@ -588,7 +664,7 @@ class MaterialDataExtractor:
             return []
 
     def _get_element_info(self, element):
-        """Get common element information using optimized parameter access"""
+        """Get common element information using robust parameter access"""
         return {
             'element_id': element.Id.IntegerValue,
             'category': element.Category.Name if element.Category else "Unknown",
@@ -599,8 +675,8 @@ class MaterialDataExtractor:
             'type_id': element.GetTypeId().IntegerValue,
             'width': get_element_width(element),
             'height': get_element_height(element),
-            'volume': get_element_volume(element),
-            'area': get_element_area(element)
+            'volume': get_element_volume_robust(element),
+            'area': get_element_area_robust(element)
         }
 
     def _process_element_layers(self, element, element_info, material_layers):
@@ -692,6 +768,8 @@ class MaterialDataExtractor:
         self.output.print_md("*Elements with category:* {}".format(self.debug_info['elements_with_category']))
         self.output.print_md("*Elements with materials:* {}".format(self.debug_info['elements_with_materials']))
         self.output.print_md("*Elements with layers:* {}".format(self.debug_info['elements_with_layers']))
+        self.output.print_md("*Elements with area:* {}".format(self.debug_info['elements_with_area']))
+        self.output.print_md("*Elements with volume:* {}".format(self.debug_info['elements_with_volume']))
         self.output.print_md("*Processing errors:* {}".format(self.debug_info['errors']))
 
 def save_to_csv(material_data):
@@ -766,7 +844,7 @@ def main():
             start_time = time.time()
             
             output.close_others()
-            output.print_md("# ESG Material Data Export (Safe BuiltInParameter)")
+            output.print_md("# ESG Material Data Export (Robust Parameter Detection)")
             output.print_md("*Started:* {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
             
             extractor = MaterialDataExtractor(doc, output)
