@@ -137,46 +137,109 @@ def is_stair_element(element):
         return False
   
 def get_stair_parameters(element):
-    """Get stair-specific parameters"""
+    """Get stair-specific parameters with enhanced detection"""
     if not is_stair_element(element):
         return {}
+    
     stair_params = {}
-    # Number of Risers
+    
+    # Number of Risers - try multiple parameter names
     stair_params['NumberOfRisers'] = get_parameter_value_comprehensive(
         element,
-        ["STAIRS_ATTR_TOTAL_RUN_RISERS"],
+        ["STAIRS_ATTR_TOTAL_RUN_RISERS", "STAIRS_ACTUAL_NUM_RISERS", "STAIRS_DESIRED_NUM_RISERS"],
         None,
-        ["Number of Risers", "Total Risers"]
+        ["Number of Risers", "Total Risers", "Actual Number of Risers", "Desired Number of Risers", "Risers"]
     )
-    # Riser Height
+    
+    # Riser Height - try multiple parameter names
     stair_params['RiserHeight_mm'] = get_parameter_value_comprehensive(
         element,
-        ["STAIRS_ATTR_RISER_HEIGHT_PARAM"],
+        ["STAIRS_ATTR_RISER_HEIGHT_PARAM", "STAIRS_ACTUAL_RISER_HEIGHT", "STAIRS_DESIRED_RISER_HEIGHT"],
         get_unit_type_millimeters(),
-        ["Riser Height", "Actual Riser Height"]
+        ["Riser Height", "Actual Riser Height", "Desired Riser Height", "Maximum Riser Height"]
     )
-    # Tread Depth
+    
+    # Tread Depth - try multiple parameter names
     stair_params['TreadDepth_mm'] = get_parameter_value_comprehensive(
         element,
-        ["STAIRS_ATTR_TREAD_DEPTH_PARAM"],
+        ["STAIRS_ATTR_TREAD_DEPTH_PARAM", "STAIRS_ACTUAL_TREAD_DEPTH", "STAIRS_DESIRED_TREAD_DEPTH"],
         get_unit_type_millimeters(),
-        ["Tread Depth", "Actual Tread Depth"]
+        ["Tread Depth", "Actual Tread Depth", "Desired Tread Depth", "Minimum Tread Depth"]
     )
-    # Stair Width
+    
+    # Stair Width - try multiple parameter names including generic width
     stair_params['StairWidth_mm'] = get_parameter_value_comprehensive(
         element,
-        ["STAIRS_ATTR_ACTUAL_RUN_WIDTH"],
+        ["STAIRS_ATTR_ACTUAL_RUN_WIDTH", "STAIRS_ATTR_RUN_WIDTH", "GENERIC_WIDTH", "FAMILY_WIDTH_PARAM"],
         get_unit_type_millimeters(),
-        ["Actual Run Width", "Width"]
+        ["Actual Run Width", "Run Width", "Width", "Stair Width", "Clear Width"]
     )
-    # Total Height
+    
+    # Total Height - try multiple parameter names
     stair_params['TotalHeight_mm'] = get_parameter_value_comprehensive(
         element,
-        ["STAIRS_ATTR_TOTAL_HEIGHT"],
+        ["STAIRS_ATTR_TOTAL_HEIGHT", "STAIRS_ATTR_HEIGHT", "GENERIC_HEIGHT"],
         get_unit_type_millimeters(),
-        ["Total Height", "Height"]
+        ["Total Height", "Height", "Stair Height", "Overall Height"]
     )
+    
     return stair_params
+
+def debug_stair_parameters(element):
+    """Debug function to print all available parameters on a stair element"""
+    if not is_stair_element(element):
+        return
+    
+    print("=== DEBUG: Stair Element {} Parameters ===".format(element.Id.IntegerValue))
+    
+    # Print all instance parameters
+    print("Instance Parameters:")
+    for param in element.Parameters:
+        try:
+            param_name = param.Definition.Name
+            if param.HasValue:
+                if param.StorageType == StorageType.Double:
+                    value = param.AsDouble()
+                    # Try to convert common units
+                    if "width" in param_name.lower() or "height" in param_name.lower() or "depth" in param_name.lower():
+                        mm_value = convert_from_internal_units(value, get_unit_type_millimeters())
+                        print("  {} = {} (internal) / {} mm".format(param_name, value, mm_value))
+                    else:
+                        print("  {} = {}".format(param_name, value))
+                elif param.StorageType == StorageType.Integer:
+                    print("  {} = {}".format(param_name, param.AsInteger()))
+                elif param.StorageType == StorageType.String:
+                    print("  {} = '{}'".format(param_name, param.AsString()))
+                else:
+                    print("  {} = {}".format(param_name, param.AsValueString()))
+        except:
+            print("  {} = [Error reading value]".format(param_name))
+    
+    # Print type parameters if available
+    element_type = doc.GetElement(element.GetTypeId())
+    if element_type:
+        print("Type Parameters:")
+        for param in element_type.Parameters:
+            try:
+                param_name = param.Definition.Name
+                if param.HasValue:
+                    if param.StorageType == StorageType.Double:
+                        value = param.AsDouble()
+                        if "width" in param_name.lower() or "height" in param_name.lower() or "depth" in param_name.lower():
+                            mm_value = convert_from_internal_units(value, get_unit_type_millimeters())
+                            print("  {} = {} (internal) / {} mm".format(param_name, value, mm_value))
+                        else:
+                            print("  {} = {}".format(param_name, value))
+                    elif param.StorageType == StorageType.Integer:
+                        print("  {} = {}".format(param_name, param.AsInteger()))
+                    elif param.StorageType == StorageType.String:
+                        print("  {} = '{}'".format(param_name, param.AsString()))
+                    else:
+                        print("  {} = {}".format(param_name, param.AsValueString()))
+            except:
+                print("  {} = [Error reading value]".format(param_name))
+    
+    print("=== END DEBUG ===")
 
 def get_parameter_value_comprehensive(element, builtin_param_names, unit_type=None, fallback_param_names=None):
     """Comprehensive parameter value retrieval with multiple fallback methods"""
@@ -668,15 +731,21 @@ class MaterialDataExtractor:
         except Exception as e:
             raise Exception("Error collecting comprehensive material data: {}".format(str(e)))
   
+
     def _process_element(self, element):
         """Process a single element and return its material data"""
         try:
             if not element.Category:
                 return []
             self.debug_info['elements_with_category'] += 1
-            # Track stair elements
+            
+            # Track stair elements and debug the first few
             if is_stair_element(element):
                 self.debug_info['stair_elements'] += 1
+                # Debug first 3 stair elements to see available parameters
+                if self.debug_info['stair_elements'] <= 3:
+                    debug_stair_parameters(element)
+            
             element_info = self._get_element_info(element)
             # Track elements with area/volume for debugging
             if element_info['area'] != "N/A":
@@ -700,198 +769,198 @@ class MaterialDataExtractor:
             print("Error processing element {}: {}".format(element.Id.IntegerValue, str(e)))
             return []
 
-    def _create_basic_element_record(self, element, element_info):
-        """Create a basic record for elements without specific materials"""
-        try:
-            # Only create records for certain categories that should have materials
-            relevant_categories = [
-                "Walls", "Floors", "Roofs", "Ceilings", "Structural Framing",
-                "Structural Columns", "Doors", "Windows", "Furniture", "Casework", "Stairs"
-            ]
-            if element.Category and element.Category.Name in relevant_categories:
-                basic_record = {
-                    'ElementId': element_info['element_id'],
-                    'ElementCategory': element_info['category'],
-                    'ExportGUID': element_info['export_guid'],
-                    'FamilyName': element_info['family_name'],
-                    'FamilyType': element_info['family_type'],
-                    'Type': element_info['element_type'],
-                    'TypeId': element_info['type_id'],
-                    'Width_mm': element_info['width'],
-                    'Height_mm': element_info['height'],
-                    'LayerIndex': 0,
-                    'MaterialId': "No_Material",
-                    'MaterialName': "No Material Assigned",
-                    'MaterialClass': "Unknown",
-                    'Thickness_mm': get_element_thickness(element),
-                    'MaterialVolume_m3': "N/A",
-                    'MaterialArea_m2': element_info['area'],
-                    'ElementTotalVolume_m3': element_info['volume'],
-                    'ElementTotalArea_m2': element_info['area']
-                }
-                # Always add stair parameters
-                if is_stair_element(element):
-                    stair_params = element_info.get('stair_params', {})
-                    basic_record.update({
-                        'NumberOfRisers': stair_params.get('NumberOfRisers', 'N/A'),
-                        'RiserHeight_mm': stair_params.get('RiserHeight_mm', 'N/A'),
-                        'TreadDepth_mm': stair_params.get('TreadDepth_mm', 'N/A'),
-                        'StairWidth_mm': stair_params.get('StairWidth_mm', 'N/A'),
-                        'TotalHeight_mm': stair_params.get('TotalHeight_mm', 'N/A')
-                    })
-                else:
-                    basic_record.update({
-                        'NumberOfRisers': 'N/A',
-                        'RiserHeight_mm': 'N/A',
-                        'TreadDepth_mm': 'N/A',
-                        'StairWidth_mm': 'N/A',
-                        'TotalHeight_mm': 'N/A'
-                    })
-                return [basic_record]
-            return []
-        except:
-            return []
-  
-    def _get_element_info(self, element):
-        """Get common element information using robust parameter access"""
-        element_info = {
-            'element_id': element.Id.IntegerValue,
-            'category': element.Category.Name if element.Category else "Unknown",
-            'export_guid': get_export_guid(element),
-            'family_name': get_family_name(element),
-            'family_type': get_family_type(element),
-            'element_type': get_element_type_name(element),
-            'type_id': element.GetTypeId().IntegerValue,
-            'width': get_element_width(element),
-            'height': get_element_height(element),
-            'volume': get_element_volume_robust(element),
-            'area': get_element_area_robust(element)
-        }
-        # Add stair-specific parameters if it's a stair
-        if is_stair_element(element):
-            element_info['stair_params'] = get_stair_parameters(element)
-        return element_info
-
-    def _process_element_layers(self, element, element_info, material_layers):
-        """Process element using material layers"""
-        material_records = []
-        for layer in material_layers:
-            material_record = self._create_material_record(element, element_info, layer)
-            material_records.append(material_record)
-            # Track by category materials
-            if str(layer.get('MaterialId', '')).startswith('ByCategory'):
-                self.debug_info['by_category_materials'] += 1
-        return material_records
-  
-    def _process_element_fallback(self, element, element_info):
-        """Fallback processing for elements without compound structures"""
-        material_records = []
-        material_ids = get_element_material_ids(element)
-        if material_ids:
-            for material_id in material_ids:
-                material = self.doc.GetElement(material_id)
-                if material:
-                    layer_info = {
-                        'LayerIndex': 0,
-                        'MaterialId': material_id.IntegerValue,
-                        'MaterialName': material.Name if material.Name else "Unnamed Material",
-                        'Thickness_mm': get_material_thickness(element, material_id)
-                    }
-                    material_record = self._create_material_record(element, element_info, layer_info)
-                    material_records.append(material_record)
-        return material_records
-  
-    def _create_material_record(self, element, element_info, layer_info):
-        """Create a standardized material record"""
-        thickness = layer_info.get('Thickness_mm', "N/A")
-        material_volume = calculate_layer_volume(element, thickness)
-        material_area = calculate_material_area(element, None)
-        record = {
-            'ElementId': element_info['element_id'],
-            'ElementCategory': element_info['category'],
-            'ExportGUID': element_info['export_guid'],
-            'FamilyName': element_info['family_name'],
-            'FamilyType': element_info['family_type'],
-            'Type': element_info['element_type'],
-            'TypeId': element_info['type_id'],
-            'Width_mm': element_info['width'],
-            'Height_mm': element_info['height'],
-            'LayerIndex': layer_info.get('LayerIndex', 0),
-            'MaterialId': layer_info.get('MaterialId', "N/A"),
-            'MaterialName': layer_info.get('MaterialName', "N/A"),
-            'MaterialClass': self._get_material_class(layer_info),
-            'Thickness_mm': format_number(thickness),
-            'MaterialVolume_m3': format_number(material_volume),
-            'MaterialArea_m2': format_number(material_area),
-            'ElementTotalVolume_m3': format_number(element_info['volume']),
-            'ElementTotalArea_m2': format_number(element_info['area'])
-        }
-        # Always add stair parameters (N/A for non-stair elements)
-        if is_stair_element(element):
-            stair_params = element_info.get('stair_params', {})
-            record.update({
-                'NumberOfRisers': stair_params.get('NumberOfRisers', 'N/A'),
-                'RiserHeight_mm': stair_params.get('RiserHeight_mm', 'N/A'),
-                'TreadDepth_mm': stair_params.get('TreadDepth_mm', 'N/A'),
-                'StairWidth_mm': stair_params.get('StairWidth_mm', 'N/A'),
-                'TotalHeight_mm': stair_params.get('TotalHeight_mm', 'N/A')
-            })
-        else:
-            # Add N/A values for non-stair elements
-            record.update({
-                'NumberOfRisers': 'N/A',
-                'RiserHeight_mm': 'N/A',
-                'TreadDepth_mm': 'N/A',
-                'StairWidth_mm': 'N/A',
-                'TotalHeight_mm': 'N/A'
-            })
-        return record
-
-    def _get_material_class(self, layer_info):
-        """Get material class from layer info with enhanced By Category handling"""
-        material_id = layer_info.get('MaterialId')
-        material_name = layer_info.get('MaterialName', '')
-        if str(material_id).startswith('ByCategory'):
-            if 'By Category:' in material_name:
-                return "By Category (Resolved)"
-            else:
-                return "By Category (Unresolved)"
-        elif material_id == "N/A" or material_id == "Error":
-            return "Unknown"
-        elif material_id == "No_Material":
-            return "No Material"
-        else:
+        def _create_basic_element_record(self, element, element_info):
+            """Create a basic record for elements without specific materials"""
             try:
-                material = self.doc.GetElement(ElementId(int(material_id)))
-                return material.MaterialClass if material and hasattr(material, 'MaterialClass') else "Unknown"
+                # Only create records for certain categories that should have materials
+                relevant_categories = [
+                    "Walls", "Floors", "Roofs", "Ceilings", "Structural Framing",
+                    "Structural Columns", "Doors", "Windows", "Furniture", "Casework", "Stairs"
+                ]
+                if element.Category and element.Category.Name in relevant_categories:
+                    basic_record = {
+                        'ElementId': element_info['element_id'],
+                        'ElementCategory': element_info['category'],
+                        'ExportGUID': element_info['export_guid'],
+                        'FamilyName': element_info['family_name'],
+                        'FamilyType': element_info['family_type'],
+                        'Type': element_info['element_type'],
+                        'TypeId': element_info['type_id'],
+                        'Width_mm': element_info['width'],
+                        'Height_mm': element_info['height'],
+                        'LayerIndex': 0,
+                        'MaterialId': "No_Material",
+                        'MaterialName': "No Material Assigned",
+                        'MaterialClass': "Unknown",
+                        'Thickness_mm': get_element_thickness(element),
+                        'MaterialVolume_m3': "N/A",
+                        'MaterialArea_m2': element_info['area'],
+                        'ElementTotalVolume_m3': element_info['volume'],
+                        'ElementTotalArea_m2': element_info['area']
+                    }
+                    # Always add stair parameters
+                    if is_stair_element(element):
+                        stair_params = element_info.get('stair_params', {})
+                        basic_record.update({
+                            'NumberOfRisers': stair_params.get('NumberOfRisers', 'N/A'),
+                            'RiserHeight_mm': stair_params.get('RiserHeight_mm', 'N/A'),
+                            'TreadDepth_mm': stair_params.get('TreadDepth_mm', 'N/A'),
+                            'StairWidth_mm': stair_params.get('StairWidth_mm', 'N/A'),
+                            'TotalHeight_mm': stair_params.get('TotalHeight_mm', 'N/A')
+                        })
+                    else:
+                        basic_record.update({
+                            'NumberOfRisers': 'N/A',
+                            'RiserHeight_mm': 'N/A',
+                            'TreadDepth_mm': 'N/A',
+                            'StairWidth_mm': 'N/A',
+                            'TotalHeight_mm': 'N/A'
+                        })
+                    return [basic_record]
+                return []
             except:
+                return []
+    
+        def _get_element_info(self, element):
+            """Get common element information using robust parameter access"""
+            element_info = {
+                'element_id': element.Id.IntegerValue,
+                'category': element.Category.Name if element.Category else "Unknown",
+                'export_guid': get_export_guid(element),
+                'family_name': get_family_name(element),
+                'family_type': get_family_type(element),
+                'element_type': get_element_type_name(element),
+                'type_id': element.GetTypeId().IntegerValue,
+                'width': get_element_width(element),
+                'height': get_element_height(element),
+                'volume': get_element_volume_robust(element),
+                'area': get_element_area_robust(element)
+            }
+            # Add stair-specific parameters if it's a stair
+            if is_stair_element(element):
+                element_info['stair_params'] = get_stair_parameters(element)
+            return element_info
+
+        def _process_element_layers(self, element, element_info, material_layers):
+            """Process element using material layers"""
+            material_records = []
+            for layer in material_layers:
+                material_record = self._create_material_record(element, element_info, layer)
+                material_records.append(material_record)
+                # Track by category materials
+                if str(layer.get('MaterialId', '')).startswith('ByCategory'):
+                    self.debug_info['by_category_materials'] += 1
+            return material_records
+    
+        def _process_element_fallback(self, element, element_info):
+            """Fallback processing for elements without compound structures"""
+            material_records = []
+            material_ids = get_element_material_ids(element)
+            if material_ids:
+                for material_id in material_ids:
+                    material = self.doc.GetElement(material_id)
+                    if material:
+                        layer_info = {
+                            'LayerIndex': 0,
+                            'MaterialId': material_id.IntegerValue,
+                            'MaterialName': material.Name if material.Name else "Unnamed Material",
+                            'Thickness_mm': get_material_thickness(element, material_id)
+                        }
+                        material_record = self._create_material_record(element, element_info, layer_info)
+                        material_records.append(material_record)
+            return material_records
+    
+        def _create_material_record(self, element, element_info, layer_info):
+            """Create a standardized material record"""
+            thickness = layer_info.get('Thickness_mm', "N/A")
+            material_volume = calculate_layer_volume(element, thickness)
+            material_area = calculate_material_area(element, None)
+            record = {
+                'ElementId': element_info['element_id'],
+                'ElementCategory': element_info['category'],
+                'ExportGUID': element_info['export_guid'],
+                'FamilyName': element_info['family_name'],
+                'FamilyType': element_info['family_type'],
+                'Type': element_info['element_type'],
+                'TypeId': element_info['type_id'],
+                'Width_mm': element_info['width'],
+                'Height_mm': element_info['height'],
+                'LayerIndex': layer_info.get('LayerIndex', 0),
+                'MaterialId': layer_info.get('MaterialId', "N/A"),
+                'MaterialName': layer_info.get('MaterialName', "N/A"),
+                'MaterialClass': self._get_material_class(layer_info),
+                'Thickness_mm': format_number(thickness),
+                'MaterialVolume_m3': format_number(material_volume),
+                'MaterialArea_m2': format_number(material_area),
+                'ElementTotalVolume_m3': format_number(element_info['volume']),
+                'ElementTotalArea_m2': format_number(element_info['area'])
+            }
+            # Always add stair parameters (N/A for non-stair elements)
+            if is_stair_element(element):
+                stair_params = element_info.get('stair_params', {})
+                record.update({
+                    'NumberOfRisers': stair_params.get('NumberOfRisers', 'N/A'),
+                    'RiserHeight_mm': stair_params.get('RiserHeight_mm', 'N/A'),
+                    'TreadDepth_mm': stair_params.get('TreadDepth_mm', 'N/A'),
+                    'StairWidth_mm': stair_params.get('StairWidth_mm', 'N/A'),
+                    'TotalHeight_mm': stair_params.get('TotalHeight_mm', 'N/A')
+                })
+            else:
+                # Add N/A values for non-stair elements
+                record.update({
+                    'NumberOfRisers': 'N/A',
+                    'RiserHeight_mm': 'N/A',
+                    'TreadDepth_mm': 'N/A',
+                    'StairWidth_mm': 'N/A',
+                    'TotalHeight_mm': 'N/A'
+                })
+            return record
+
+        def _get_material_class(self, layer_info):
+            """Get material class from layer info with enhanced By Category handling"""
+            material_id = layer_info.get('MaterialId')
+            material_name = layer_info.get('MaterialName', '')
+            if str(material_id).startswith('ByCategory'):
+                if 'By Category:' in material_name:
+                    return "By Category (Resolved)"
+                else:
+                    return "By Category (Unresolved)"
+            elif material_id == "N/A" or material_id == "Error":
                 return "Unknown"
-  
-    def _update_progress(self, current, total):
-        """Update progress display"""
-        progress_percent = int(current * 100 / total)
-        self.output.update_progress(current, total)
-        print("Processing element {} of {} ({}%) - {} material records so far".format(
-            current, total, progress_percent, self.material_records))
-  
-    def _print_completion_stats(self):
-        """Print completion statistics"""
-        self.output.print_md("## Collection Complete!")
-        self.output.print_md("*Elements processed:* {}".format(self.processed_elements))
-        self.output.print_md("*Material records created:* {}".format(self.material_records))
-  
-    def _print_debug_info(self):
-        """Print debug information"""
-        self.output.print_md("## Debug Information")
-        self.output.print_md("*Total elements:* {}".format(self.debug_info['total_elements']))
-        self.output.print_md("*Elements with category:* {}".format(self.debug_info['elements_with_category']))
-        self.output.print_md("*Elements with materials:* {}".format(self.debug_info['elements_with_materials']))
-        self.output.print_md("*Elements with layers:* {}".format(self.debug_info['elements_with_layers']))
-        self.output.print_md("*Elements with area:* {}".format(self.debug_info['elements_with_area']))
-        self.output.print_md("*Elements with volume:* {}".format(self.debug_info['elements_with_volume']))
-        self.output.print_md("*By Category materials:* {}".format(self.debug_info['by_category_materials']))
-        self.output.print_md("*Stair elements:* {}".format(self.debug_info['stair_elements']))
-        self.output.print_md("*Processing errors:* {}".format(self.debug_info['errors']))
+            elif material_id == "No_Material":
+                return "No Material"
+            else:
+                try:
+                    material = self.doc.GetElement(ElementId(int(material_id)))
+                    return material.MaterialClass if material and hasattr(material, 'MaterialClass') else "Unknown"
+                except:
+                    return "Unknown"
+    
+        def _update_progress(self, current, total):
+            """Update progress display"""
+            progress_percent = int(current * 100 / total)
+            self.output.update_progress(current, total)
+            print("Processing element {} of {} ({}%) - {} material records so far".format(
+                current, total, progress_percent, self.material_records))
+    
+        def _print_completion_stats(self):
+            """Print completion statistics"""
+            self.output.print_md("## Collection Complete!")
+            self.output.print_md("*Elements processed:* {}".format(self.processed_elements))
+            self.output.print_md("*Material records created:* {}".format(self.material_records))
+    
+        def _print_debug_info(self):
+            """Print debug information"""
+            self.output.print_md("## Debug Information")
+            self.output.print_md("*Total elements:* {}".format(self.debug_info['total_elements']))
+            self.output.print_md("*Elements with category:* {}".format(self.debug_info['elements_with_category']))
+            self.output.print_md("*Elements with materials:* {}".format(self.debug_info['elements_with_materials']))
+            self.output.print_md("*Elements with layers:* {}".format(self.debug_info['elements_with_layers']))
+            self.output.print_md("*Elements with area:* {}".format(self.debug_info['elements_with_area']))
+            self.output.print_md("*Elements with volume:* {}".format(self.debug_info['elements_with_volume']))
+            self.output.print_md("*By Category materials:* {}".format(self.debug_info['by_category_materials']))
+            self.output.print_md("*Stair elements:* {}".format(self.debug_info['stair_elements']))
+            self.output.print_md("*Processing errors:* {}".format(self.debug_info['errors']))
 
 def save_to_csv(material_data):
     """Save comprehensive material data to CSV file with semicolon delimiter"""
