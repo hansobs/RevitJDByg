@@ -577,6 +577,82 @@ def get_material_layers(element):
         })
     return results
 
+def debug_stair_run_materials(element):
+    """Debug function to examine materials in stair run types"""
+    if not is_stair_element(element):
+        return
+    
+    print("=== STAIR RUN MATERIALS DEBUG: Stair Element {} ===".format(element.Id.IntegerValue))
+    
+    try:
+        stair_runs = element.GetStairsRuns()
+        print("Number of stair runs: {}".format(len(stair_runs)))
+        
+        for i, run_id in enumerate(stair_runs):
+            run_element = doc.GetElement(run_id)
+            if run_element:
+                print("Run {} (ID: {}):".format(i + 1, run_id.IntegerValue))
+                
+                # Get the run type
+                run_type_id = run_element.GetTypeId()
+                run_type = doc.GetElement(run_type_id)
+                
+                if run_type:
+                    print("  Run Type: {}".format(run_type.Name))
+                    
+                    # Check all parameters for material-related ones
+                    print("  Run Type Parameters:")
+                    for param in run_type.Parameters:
+                        try:
+                            param_name = param.Definition.Name
+                            if "material" in param_name.lower():
+                                if param.HasValue:
+                                    if param.StorageType == StorageType.ElementId:
+                                        material_id = param.AsElementId()
+                                        if material_id != ElementId.InvalidElementId:
+                                            material = doc.GetElement(material_id)
+                                            if material:
+                                                print("    {} = {} (ID: {})".format(param_name, material.Name, material_id.IntegerValue))
+                                            else:
+                                                print("    {} = [Material not found] (ID: {})".format(param_name, material_id.IntegerValue))
+                                        else:
+                                            print("    {} = [Invalid Element ID]".format(param_name))
+                                    else:
+                                        print("    {} = {}".format(param_name, param.AsValueString()))
+                                else:
+                                    print("    {} = [No value]".format(param_name))
+                        except:
+                            pass
+                    
+                    # Also check run element itself for materials
+                    print("  Run Element Parameters:")
+                    for param in run_element.Parameters:
+                        try:
+                            param_name = param.Definition.Name
+                            if "material" in param_name.lower():
+                                if param.HasValue:
+                                    if param.StorageType == StorageType.ElementId:
+                                        material_id = param.AsElementId()
+                                        if material_id != ElementId.InvalidElementId:
+                                            material = doc.GetElement(material_id)
+                                            if material:
+                                                print("    {} = {} (ID: {})".format(param_name, material.Name, material_id.IntegerValue))
+                                            else:
+                                                print("    {} = [Material not found] (ID: {})".format(param_name, material_id.IntegerValue))
+                                        else:
+                                            print("    {} = [Invalid Element ID]".format(param_name))
+                                    else:
+                                        print("    {} = {}".format(param_name, param.AsValueString()))
+                                else:
+                                    print("    {} = [No value]".format(param_name))
+                        except:
+                            pass
+                            
+    except Exception as e:
+        print("Error accessing stair run materials: {}".format(str(e)))
+    
+    print("=== END STAIR RUN MATERIALS DEBUG ===")
+
 
 def get_element_type_name(element):
     """Get the element type name using comprehensive search"""
@@ -979,6 +1055,7 @@ class MaterialDataExtractor:
                     debug_stair_width_parameters(element)
                     debug_stair_builtin_parameters(element)
                     debug_stair_run_parameters(element)
+                    debug_stair_run_materials(element)
                     print("FINISHED DEBUG for stair element {}".format(element.Id.IntegerValue))
             else:
                 # Debug what categories we're actually seeing
