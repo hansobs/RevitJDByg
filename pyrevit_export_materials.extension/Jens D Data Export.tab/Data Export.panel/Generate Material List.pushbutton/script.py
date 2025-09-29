@@ -30,14 +30,11 @@ output = get_output()
 def get_unit_type_millimeters():
     """Get the correct unit type for millimeters based on Revit version"""
     try:
-        # Try Revit 2021+ approach
         return UnitTypeId.Millimeters
     except:
         try:
-            # Try older Revit versions
             return DisplayUnitType.DUT_MILLIMETERS
         except:
-            # Fallback for very old versions
             return None
 
 def get_unit_type_square_meters():
@@ -65,15 +62,22 @@ def convert_from_internal_units(value, unit_type):
     if unit_type is None:
         return value
     try:
-        # Try newer API
         return UnitUtils.ConvertFromInternalUnits(value, unit_type)
     except:
+        return value
+
+# Safe BuiltInParameter access
+def get_safe_builtin_params(param_names):
+    """Safely get BuiltInParameter values that exist in the current Revit version"""
+    safe_params = []
+    for param_name in param_names:
         try:
-            # Try older API
-            return UnitUtils.ConvertFromInternalUnits(value, unit_type)
-        except:
-            # If all else fails, return the value as-is
-            return value
+            param_value = getattr(BuiltInParameter, param_name)
+            safe_params.append(param_value)
+        except AttributeError:
+            # Parameter doesn't exist in this version, skip it
+            continue
+    return safe_params
 
 # Configuration constants
 class Config:
@@ -110,11 +114,14 @@ def format_number(value, decimals=Config.DEFAULT_DECIMALS):
     except:
         return "N/A"
 
-def get_builtin_parameter_value(element, builtin_params, unit_type=None, fallback_param_names=None):
+def get_builtin_parameter_value(element, builtin_param_names, unit_type=None, fallback_param_names=None):
     """Get parameter value using BuiltInParameter first, then fallback to string lookup"""
     try:
+        # Get safe BuiltInParameters that exist in this version
+        safe_builtin_params = get_safe_builtin_params(builtin_param_names)
+        
         # Try built-in parameters first (most efficient)
-        for builtin_param in builtin_params:
+        for builtin_param in safe_builtin_params:
             try:
                 param = element.get_Parameter(builtin_param)
                 if param and param.HasValue:
@@ -130,7 +137,7 @@ def get_builtin_parameter_value(element, builtin_params, unit_type=None, fallbac
         # Try type parameters with built-in parameters
         element_type = doc.GetElement(element.GetTypeId())
         if element_type:
-            for builtin_param in builtin_params:
+            for builtin_param in safe_builtin_params:
                 try:
                     param = element_type.get_Parameter(builtin_param)
                     if param and param.HasValue:
@@ -175,10 +182,7 @@ def get_element_width(element):
     """Get Width parameter from element using BuiltInParameter"""
     return get_builtin_parameter_value(
         element,
-        [BuiltInParameter.DOOR_WIDTH, 
-         BuiltInParameter.WINDOW_WIDTH,
-         BuiltInParameter.GENERIC_WIDTH,
-         BuiltInParameter.FAMILY_WIDTH_PARAM],
+        ["DOOR_WIDTH", "WINDOW_WIDTH", "GENERIC_WIDTH", "FAMILY_WIDTH_PARAM"],
         get_unit_type_millimeters(),
         ["Width"]  # Fallback
     )
@@ -187,11 +191,7 @@ def get_element_height(element):
     """Get Height parameter from element using BuiltInParameter"""
     return get_builtin_parameter_value(
         element,
-        [BuiltInParameter.DOOR_HEIGHT,
-         BuiltInParameter.WINDOW_HEIGHT,
-         BuiltInParameter.GENERIC_HEIGHT,
-         BuiltInParameter.FAMILY_HEIGHT_PARAM,
-         BuiltInParameter.WALL_USER_HEIGHT_PARAM],
+        ["DOOR_HEIGHT", "WINDOW_HEIGHT", "GENERIC_HEIGHT", "FAMILY_HEIGHT_PARAM", "WALL_USER_HEIGHT_PARAM"],
         get_unit_type_millimeters(),
         ["Height"]  # Fallback
     )
@@ -200,9 +200,7 @@ def get_element_thickness(element):
     """Get Thickness parameter from element using BuiltInParameter"""
     return get_builtin_parameter_value(
         element,
-        [BuiltInParameter.WALL_ATTR_WIDTH_PARAM,
-         BuiltInParameter.GENERIC_THICKNESS,
-         BuiltInParameter.FAMILY_THICKNESS_PARAM],
+        ["WALL_ATTR_WIDTH_PARAM", "GENERIC_THICKNESS", "FAMILY_THICKNESS_PARAM"],
         get_unit_type_millimeters(),
         ["Thickness"]  # Fallback
     )
@@ -211,9 +209,7 @@ def get_element_area(element):
     """Get Area parameter from element using BuiltInParameter"""
     return get_builtin_parameter_value(
         element,
-        [BuiltInParameter.HOST_AREA_COMPUTED,
-         BuiltInParameter.ROOM_AREA,
-         BuiltInParameter.SPACE_ASSOC_ROOM_AREA],
+        ["HOST_AREA_COMPUTED", "ROOM_AREA", "SPACE_ASSOC_ROOM_AREA"],
         get_unit_type_square_meters(),
         ["Area"]  # Fallback
     )
@@ -222,9 +218,7 @@ def get_element_volume(element):
     """Get Volume parameter from element using BuiltInParameter"""
     return get_builtin_parameter_value(
         element,
-        [BuiltInParameter.HOST_VOLUME_COMPUTED,
-         BuiltInParameter.ROOM_VOLUME,
-         BuiltInParameter.SPACE_ASSOC_ROOM_VOLUME],
+        ["HOST_VOLUME_COMPUTED", "ROOM_VOLUME", "SPACE_ASSOC_ROOM_VOLUME"],
         get_unit_type_cubic_meters(),
         ["Volume"]  # Fallback
     )
@@ -289,8 +283,7 @@ def get_element_type_name(element):
         # Try BuiltInParameter first
         type_name = get_builtin_parameter_value(
             element,
-            [BuiltInParameter.ELEM_TYPE_PARAM,
-             BuiltInParameter.SYMBOL_NAME_PARAM],
+            ["ELEM_TYPE_PARAM", "SYMBOL_NAME_PARAM"],
             None,
             ["Type Name"]  # Fallback
         )
@@ -342,8 +335,7 @@ def get_family_name(element):
         # Try BuiltInParameter first
         family_name = get_builtin_parameter_value(
             element,
-            [BuiltInParameter.ELEM_FAMILY_PARAM,
-             BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM],
+            ["ELEM_FAMILY_PARAM", "SYMBOL_FAMILY_NAME_PARAM"],
             None,
             ["Family"]  # Fallback
         )
@@ -371,8 +363,7 @@ def get_family_type(element):
         # Try BuiltInParameter first
         family_type = get_builtin_parameter_value(
             element,
-            [BuiltInParameter.ELEM_FAMILY_AND_TYPE_PARAM,
-             BuiltInParameter.SYMBOL_FAMILY_AND_TYPE_NAMES_PARAM],
+            ["ELEM_FAMILY_AND_TYPE_PARAM", "SYMBOL_FAMILY_AND_TYPE_NAMES_PARAM"],
             None,
             ["Family and Type"]  # Fallback
         )
@@ -502,7 +493,8 @@ class MaterialDataExtractor:
             'elements_with_category': 0,
             'elements_with_materials': 0,
             'elements_with_layers': 0,
-            'elements_processed': 0
+            'elements_processed': 0,
+            'errors': 0
         }
 
     def extract_all_materials(self):
@@ -556,6 +548,7 @@ class MaterialDataExtractor:
                     # Create a basic record even if no materials found
                     return self._create_basic_element_record(element, element_info)
         except Exception as e:
+            self.debug_info['errors'] += 1
             print("Error processing element {}: {}".format(element.Id.IntegerValue, str(e)))
             return []
 
@@ -699,6 +692,7 @@ class MaterialDataExtractor:
         self.output.print_md("*Elements with category:* {}".format(self.debug_info['elements_with_category']))
         self.output.print_md("*Elements with materials:* {}".format(self.debug_info['elements_with_materials']))
         self.output.print_md("*Elements with layers:* {}".format(self.debug_info['elements_with_layers']))
+        self.output.print_md("*Processing errors:* {}".format(self.debug_info['errors']))
 
 def save_to_csv(material_data):
     """Save comprehensive material data to CSV file with semicolon delimiter"""
@@ -772,7 +766,7 @@ def main():
             start_time = time.time()
             
             output.close_others()
-            output.print_md("# ESG Material Data Export (Version Compatible)")
+            output.print_md("# ESG Material Data Export (Safe BuiltInParameter)")
             output.print_md("*Started:* {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
             
             extractor = MaterialDataExtractor(doc, output)
